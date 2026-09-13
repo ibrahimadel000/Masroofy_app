@@ -20,6 +20,42 @@ subprojects {
 }
 
 subprojects {
+    if (name == "telephony") {
+        try {
+            if (project.buildFile.exists()) {
+                var txt = project.buildFile.readText()
+                var modified = false
+                val regex = Regex("""compileSdk(?:Version)?[\s(=]+(\d+)""")
+                val match = regex.find(txt)
+                if (match != null) {
+                    val version = match.groupValues[1].toIntOrNull()
+                    if (version != null && version < 34) {
+                        txt = txt.replace(regex, "compileSdkVersion 34")
+                        modified = true
+                    }
+                }
+                if (!txt.contains("namespace")) {
+                    txt = txt.replace("android {", "android {\n    namespace 'com.shounakmulay.telephony'")
+                    modified = true
+                }
+                if (txt.contains("compileKotlin")) {
+                    txt = txt.replace(Regex("""compileKotlin\s*\{[\s\S]*?\}\s*\}"""), "// compileKotlin removed")
+                    modified = true
+                }
+                if (txt.contains("compileTestKotlin")) {
+                    txt = txt.replace(Regex("""compileTestKotlin\s*\{[\s\S]*?\}\s*\}"""), "// compileTestKotlin removed")
+                    modified = true
+                }
+                if (modified) {
+                    project.buildFile.setWritable(true)
+                    project.buildFile.writeText(txt)
+                    println("==> Patched telephony build.gradle (compileSdk 34 + removed legacy compileKotlin)")
+                }
+            }
+        } catch (e: Exception) {
+        }
+    }
+
     plugins.withId("com.android.library") {
         val android = extensions.findByName("android")
         if (android != null) {
@@ -41,7 +77,7 @@ subprojects {
     }
 
     if (name == "telephony") {
-        afterEvaluate {
+        val configureTelephonyKotlin = {
             tasks.matching { it.name.contains("Kotlin") }.configureEach {
                 var setDone = false
                 try {
@@ -59,6 +95,14 @@ subprojects {
                     } catch (e2: Exception) {
                     }
                 }
+            }
+        }
+
+        if (state.executed) {
+            configureTelephonyKotlin()
+        } else {
+            afterEvaluate {
+                configureTelephonyKotlin()
             }
         }
     }

@@ -1,0 +1,733 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mizaan/core/constants/app_constants.dart';
+import 'package:mizaan/core/theme/app_theme.dart';
+import 'package:mizaan/core/utils/balance_calculator.dart';
+import 'package:mizaan/data/models/transaction_model.dart';
+import 'package:mizaan/data/models/wallet_model.dart';
+import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
+import 'package:mizaan/features/transactions/screens/add_transaction_screen.dart';
+import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mizaan/core/router/app_router.dart';
+import 'package:mizaan/features/favorites/screens/favorites_screen.dart';
+import 'package:mizaan/features/sms/cubit/sms_cubit.dart';
+import 'package:mizaan/features/settings/screens/settings_screen.dart';
+import 'package:mizaan/features/stats/screens/stats_screen.dart';
+import 'package:mizaan/features/wallets/screens/add_wallet_screen.dart';
+import 'package:mizaan/data/services/notification_service.dart';
+import 'package:mizaan/features/wallets/screens/wallet_details_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentTabIndex = 0;
+  bool _isOffline = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (Platform.isAndroid) {
+        _triggerAutoImportIfEnabled();
+      }
+      _checkNotificationPermissionOnce();
+      _checkConnectivity();
+    });
+  }
+
+  Future<void> _checkConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
+      if (mounted) {
+        setState(() => _isOffline = result.isEmpty || result[0].rawAddress.isEmpty);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isOffline = true);
+      }
+    }
+  }
+
+  Future<void> _checkNotificationPermissionOnce() async {
+    final prefs = await SharedPreferences.getInstance();
+    final requested = prefs.getBool('notificationPermissionRequested') ?? false;
+    if (!requested) {
+      await prefs.setBool('notificationPermissionRequested', true);
+      final notif = NotificationService();
+      await notif.init();
+      final granted = await notif.requestPermission();
+      if (granted) {
+        final reminder = prefs.getBool('dailyReminderEnabled') ?? true;
+        if (reminder) {
+          await notif.scheduleDailyReminder();
+        }
+      }
+    }
+  }
+
+  Future<void> _triggerAutoImportIfEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    final autoImportEnabled = prefs.getBool('smsAutoImportEnabled') ?? true;
+    if (!autoImportEnabled) return;
+
+    if (!mounted) return;
+    final walletsState = context.read<WalletsCubit>().state;
+    final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+    if (wallets.isEmpty) return;
+
+    final importedCount = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+    if (importedCount > 0 && mounted) {
+      context.read<TransactionsCubit>().loadTransactions();
+      context.read<WalletsCubit>().loadWallets();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(
+            children: [
+              const Icon(Icons.mark_email_read_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Text('تم استيراد $importedCount حركات تلقائياً من رسائل المحافظ 📩'),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.account_balance_wallet_rounded, color: AppTheme.primaryColor),
+            SizedBox(width: 8),
+            Text(
+              'ميزان',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+            ),
+          ],
+        ),
+        actions: [
+          // Android-only SMS Quick Sync button in AppBar
+          if (Platform.isAndroid)
+            Padding(
+              padding: const EdgeInsets.only(left: 8.0),
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.blue.shade50,
+                  foregroundColor: Colors.blue.shade800,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Text('📩', style: TextStyle(fontSize: 14)),
+                label: const Text(
+                  'مزامنة الرسائل',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                onPressed: () {
+                  Navigator.pushNamed(context, AppRoutes.smsSync);
+                },
+              ),
+            ),
+        ],
+      ),
+      floatingActionButton: _currentTabIndex == 0
+          ? FloatingActionButton.extended(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
+                );
+              },
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('➕ حركة'),
+            )
+          : null,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentTabIndex,
+        onDestinationSelected: (idx) => setState(() => _currentTabIndex = idx),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'الرئيسية',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.pie_chart_outline_rounded),
+            selectedIcon: Icon(Icons.pie_chart_rounded),
+            label: 'التقارير',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.star_outline_rounded),
+            selectedIcon: Icon(Icons.star_rounded),
+            label: 'المفضلة',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings_rounded),
+            label: 'الإعدادات',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildOfflineBanner(),
+          Expanded(child: _buildCurrentTab()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfflineBanner() {
+    if (!_isOffline) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      color: Colors.amber.shade800,
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+          SizedBox(width: 8),
+          Text(
+            'وضع أوفلاين — سيتم المزامنة لاحقاً',
+            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentTab() {
+    switch (_currentTabIndex) {
+      case 0:
+        return const _HomeMainView();
+      case 1:
+        return const StatsScreen(isEmbedded: true);
+      case 2:
+        return const FavoritesScreen(isEmbedded: true);
+      case 3:
+        return const SettingsScreen(isEmbedded: true);
+      default:
+        return const _HomeMainView();
+    }
+  }
+}
+
+class _HomeMainView extends StatelessWidget {
+  const _HomeMainView();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<WalletsCubit, WalletsState>(
+      builder: (context, walletsState) {
+        final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+
+        return BlocBuilder<TransactionsCubit, TransactionsState>(
+          builder: (context, txState) {
+            final transactions = txState is TransactionsLoaded ? txState.transactions : <TransactionModel>[];
+
+            final totalBalance = BalanceCalculator.calculateTotalBalance(
+              wallets: wallets,
+              allTransactions: transactions,
+            );
+            final todaySpending = BalanceCalculator.calculateTodaySpending(transactions);
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                context.read<WalletsCubit>().loadWallets();
+                context.read<TransactionsCubit>().loadTransactions();
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1. Total Balance Card
+                    _buildTotalBalanceCard(totalBalance, todaySpending),
+
+                    const SizedBox(height: 24),
+
+                    // 2. Horizontal Wallets List Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'محافظي',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${wallets.length}',
+                                  style: const TextStyle(
+                                    color: AppTheme.primaryColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const AddWalletScreen()),
+                              );
+                            },
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                            label: const Text('إضافة محفظة'),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Horizontal Wallets Carousel
+                    _buildWalletsHorizontalList(context, wallets, transactions),
+
+                    const SizedBox(height: 28),
+
+                    // 3. Recent Transactions Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'آخر الحركات المالية',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          if (transactions.isNotEmpty)
+                            Text(
+                              '${transactions.length} حركة',
+                              style: const TextStyle(color: Colors.grey, fontSize: 13),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Recent Transactions List
+                    _buildRecentTransactionsList(transactions, wallets),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTotalBalanceCard(double totalBalance, double todaySpending) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.all(22.0),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            AppTheme.primaryColor,
+            AppTheme.secondaryColor,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryColor.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'إجمالي الرصيد',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Icon(
+                Icons.account_balance_wallet_rounded,
+                color: Colors.white70,
+                size: 22,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            AppConstants.formatCurrency(totalBalance),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.arrow_downward_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'مصروف اليوم: ${AppConstants.formatCurrency(todaySpending)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWalletsHorizontalList(
+    BuildContext context,
+    List<Wallet> wallets,
+    List<TransactionModel> transactions,
+  ) {
+    if (wallets.isEmpty) {
+      return Container(
+        height: 140,
+        margin: const EdgeInsets.symmetric(horizontal: 16.0),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                'لم تقم بإضافة أي محفظة بعد',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AddWalletScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('أضف محفظتك الأولى الآن'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 155,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12.0),
+        itemCount: wallets.length + 1,
+        itemBuilder: (context, index) {
+          if (index == wallets.length) {
+            // Add wallet card at end
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddWalletScreen()),
+                );
+              },
+              child: Container(
+                width: 130,
+                margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.4),
+                    style: BorderStyle.solid,
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryColor, size: 36),
+                    SizedBox(height: 8),
+                    Text(
+                      'إضافة محفظة',
+                      style: TextStyle(
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final wallet = wallets[index];
+          final walletColor = Color(wallet.colorValue);
+          final walletTx = transactions.where((tx) => tx.walletId == wallet.id).toList();
+          final balance = BalanceCalculator.calculateWalletBalance(
+            openingBalance: wallet.openingBalance,
+            transactions: walletTx,
+          );
+
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WalletDetailsScreen(walletId: wallet.id),
+                ),
+              );
+            },
+            child: Container(
+              width: 175,
+              margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: walletColor,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: walletColor.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Icon(
+                        AppConstants.getWalletIcon(wallet.iconCodePoint),
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      GestureDetector(
+                        onTap: () => context.read<WalletsCubit>().toggleFavorite(wallet.id),
+                        child: Icon(
+                          wallet.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
+                          color: wallet.isFavorite ? Colors.amber : Colors.white70,
+                          size: 22,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        wallet.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        AppConstants.formatCurrency(balance),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRecentTransactionsList(
+    List<TransactionModel> transactions,
+    List<Wallet> wallets,
+  ) {
+    if (transactions.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 36.0),
+          child: Column(
+            children: [
+              Icon(
+                Icons.receipt_long_rounded,
+                size: 56,
+                color: Colors.grey.withValues(alpha: 0.4),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'لا توجد حركات مسجلة بعد',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'اضغط على زر ➕ حركة لتسجيل أول حركة مالية',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final recent = transactions.take(15).toList();
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      itemCount: recent.length,
+      itemBuilder: (context, index) {
+        final tx = recent[index];
+        final wallet = wallets.cast<Wallet?>().firstWhere(
+              (w) => w?.id == tx.walletId,
+              orElse: () => null,
+            );
+
+        final isIncome = tx.type == 'income';
+        final isAdjustment = tx.type == 'adjustment';
+
+        final Color amountColor = isIncome
+            ? AppTheme.primaryColor
+            : isAdjustment
+                ? Colors.blue.shade700
+                : Colors.red.shade700;
+        final String prefix = isIncome
+            ? '+'
+            : isAdjustment
+                ? (tx.amount >= 0 ? '+' : '')
+                : '-';
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 5.0),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: amountColor.withValues(alpha: 0.12),
+              child: Icon(
+                AppConstants.getCategoryIcon(tx.category),
+                color: amountColor,
+                size: 22,
+              ),
+            ),
+            title: Row(
+              children: [
+                Text(
+                  tx.category,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                if (tx.source == 'sms') ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('📩', style: TextStyle(fontSize: 10)),
+                        SizedBox(width: 2),
+                        Text(
+                          'SMS',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            subtitle: Text(
+              '${wallet?.name ?? "محفظة"} • ${AppConstants.formatDate(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: Text(
+              '$prefix${AppConstants.formatCurrency(tx.amount.abs())}',
+              style: TextStyle(
+                color: amountColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+

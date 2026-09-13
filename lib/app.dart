@@ -1,17 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/theme/theme_cubit.dart';
 import 'package:mizaan/data/repositories/auth_repository.dart';
+import 'package:mizaan/data/repositories/transaction_repository.dart';
+import 'package:mizaan/data/repositories/wallet_repository.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
+import 'package:mizaan/data/services/sms_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
+import 'package:mizaan/features/sms/cubit/sms_cubit.dart';
 import 'package:mizaan/features/splash/screens/splash_screen.dart';
+import 'package:mizaan/features/stats/cubit/stats_cubit.dart';
+import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
+import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
 
 class MizaanApp extends StatelessWidget {
   final SharedPreferences prefs;
   final AuthRepository? authRepository;
   final BiometricService? biometricService;
+  final WalletRepository? walletRepository;
+  final TransactionRepository? transactionRepository;
   final Widget? homeOverride;
 
   const MizaanApp({
@@ -19,6 +29,8 @@ class MizaanApp extends StatelessWidget {
     required this.prefs,
     this.authRepository,
     this.biometricService,
+    this.walletRepository,
+    this.transactionRepository,
     this.homeOverride,
   });
 
@@ -36,6 +48,30 @@ class MizaanApp extends StatelessWidget {
             prefs: prefs,
           )..checkAuthStatus(),
         ),
+        BlocProvider<WalletsCubit>(
+          create: (_) => WalletsCubit(
+            repository: walletRepository ?? WalletRepository(),
+          ),
+        ),
+        BlocProvider<TransactionsCubit>(
+          create: (_) => TransactionsCubit(
+            repository: transactionRepository ?? TransactionRepository(),
+            walletRepository: walletRepository ?? WalletRepository(),
+            prefs: prefs,
+          ),
+        ),
+        BlocProvider<SmsCubit>(
+          create: (_) => SmsCubit(
+            smsService: const SmsService(),
+            transactionRepository: transactionRepository ?? TransactionRepository(),
+          ),
+        ),
+        BlocProvider<StatsCubit>(
+          create: (_) => StatsCubit(
+            transactionRepository: transactionRepository ?? TransactionRepository(),
+            walletRepository: walletRepository ?? WalletRepository(),
+          ),
+        ),
       ],
       child: BlocBuilder<ThemeCubit, ThemeMode>(
         builder: (context, themeMode) {
@@ -51,6 +87,7 @@ class MizaanApp extends StatelessWidget {
                 child: child ?? const SizedBox.shrink(),
               );
             },
+            onGenerateRoute: (settings) => AppRoutes.onGenerateRoute(settings, prefs),
             home: homeOverride ?? SplashScreen(prefs: prefs),
           );
         },

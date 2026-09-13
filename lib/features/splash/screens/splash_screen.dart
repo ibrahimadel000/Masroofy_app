@@ -6,7 +6,7 @@ import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/auth/screens/biometric_gate_screen.dart';
 import 'package:mizaan/features/auth/screens/login_screen.dart';
-import 'package:mizaan/features/home/screens/home_placeholder.dart';
+import 'package:mizaan/features/home/screens/home_screen.dart';
 import 'package:mizaan/features/onboarding/screens/intro_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -153,7 +153,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     Widget destination;
 
     if (authState is Authenticated) {
-      destination = const HomePlaceholderScreen();
+      destination = const HomeScreen();
     } else if (authState is BiometricRequired) {
       destination = const BiometricGateScreen();
     } else {
