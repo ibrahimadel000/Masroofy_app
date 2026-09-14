@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
+import 'package:mizaan/data/services/biometric_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 
 class BiometricGateScreen extends StatefulWidget {
@@ -25,10 +27,29 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> {
     if (_isAuthenticating) return;
     setState(() => _isAuthenticating = true);
 
-    await context.read<AuthCubit>().authenticateWithBiometrics();
+    final result = await context.read<AuthCubit>().authenticateWithBiometrics();
 
     if (mounted) {
       setState(() => _isAuthenticating = false);
+      if (result == BiometricAuthResult.success) {
+        Navigator.pushReplacementNamed(context, AppRoutes.home);
+      } else {
+        String msg = 'يرجى تأكيد البصمة للمتابعة';
+        if (result == BiometricAuthResult.notEnrolled) {
+          msg = 'لم يتم تسجيل بصمة في هذا الجهاز أو المحاكي. يمكنك استخدام زر التخطي أدناه للمتابعة.';
+        } else if (result == BiometricAuthResult.notAvailable) {
+          msg = 'المصادقة بالبصمة غير مدعومة على هذا الجهاز.';
+        } else if (result == BiometricAuthResult.lockedOut) {
+          msg = 'تم قفل محاولات البصمة مؤقتاً لكثرة المحاولات الخاطئة.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
@@ -89,9 +110,39 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pushReplacementNamed(context, AppRoutes.home);
+                  },
+                  icon: const Icon(Icons.arrow_forward_rounded, color: AppTheme.primaryColor),
+                  label: const Text(
+                    'تخطي البصمة ومتابعة الدخول 🚀',
+                    style: TextStyle(
+                      color: AppTheme.primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    side: BorderSide(color: AppTheme.primaryColor.withValues(alpha: 0.5)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () => context.read<AuthCubit>().signOut(),
+                  onPressed: () async {
+                    await context.read<AuthCubit>().signOut();
+                    if (context.mounted) {
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        AppRoutes.login,
+                        (route) => false,
+                      );
+                    }
+                  },
                   child: const Text(
                     'تسجيل الخروج من الحساب',
                     style: TextStyle(

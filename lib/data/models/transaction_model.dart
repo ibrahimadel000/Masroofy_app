@@ -34,6 +34,12 @@ class TransactionModel extends HiveObject {
   @HiveField(9)
   final DateTime createdAt;
 
+  @HiveField(10)
+  final String? rawSmsBody;
+
+  @HiveField(11)
+  final String? rawSmsSender;
+
   TransactionModel({
     required this.id,
     required this.walletId,
@@ -45,6 +51,8 @@ class TransactionModel extends HiveObject {
     required this.source,
     this.smsKey,
     required this.createdAt,
+    this.rawSmsBody,
+    this.rawSmsSender,
   });
 
   TransactionModel copyWith({
@@ -58,6 +66,8 @@ class TransactionModel extends HiveObject {
     String? source,
     String? smsKey,
     DateTime? createdAt,
+    String? rawSmsBody,
+    String? rawSmsSender,
   }) {
     return TransactionModel(
       id: id ?? this.id,
@@ -70,6 +80,8 @@ class TransactionModel extends HiveObject {
       source: source ?? this.source,
       smsKey: smsKey ?? this.smsKey,
       createdAt: createdAt ?? this.createdAt,
+      rawSmsBody: rawSmsBody ?? this.rawSmsBody,
+      rawSmsSender: rawSmsSender ?? this.rawSmsSender,
     );
   }
 
@@ -85,6 +97,8 @@ class TransactionModel extends HiveObject {
       'source': source,
       'smsKey': smsKey,
       'createdAt': createdAt.toIso8601String(),
+      'rawSmsBody': rawSmsBody,
+      'rawSmsSender': rawSmsSender,
     };
   }
 
@@ -100,6 +114,8 @@ class TransactionModel extends HiveObject {
       source: map['source'] as String,
       smsKey: map['smsKey'] as String?,
       createdAt: DateTime.parse(map['createdAt'] as String),
+      rawSmsBody: map['rawSmsBody'] as String?,
+      rawSmsSender: map['rawSmsSender'] as String?,
     );
   }
 }

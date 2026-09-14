@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/utils/validators.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
@@ -28,12 +30,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _checkBiometricsAvailability() async {
-    final biometricService = BiometricService();
-    final available = await biometricService.isBiometricsAvailable();
-    if (mounted) {
-      setState(() {
-        _canUseBiometrics = available;
-      });
+    try {
+      final biometricService = BiometricService();
+      final available = await biometricService.isBiometricsAvailable();
+      if (mounted) {
+        setState(() {
+          _canUseBiometrics = available ||
+              defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _canUseBiometrics = true;
+        });
+      }
     }
   }
 
@@ -50,6 +62,30 @@ class _LoginScreenState extends State<LoginScreen> {
             email: _emailController.text,
             password: _passwordController.text,
           );
+    }
+  }
+
+  Future<void> _loginWithBiometrics() async {
+    final result = await context.read<AuthCubit>().authenticateWithBiometrics();
+    if (!mounted) return;
+    if (result == BiometricAuthResult.success) {
+      // Authenticated state listener handles navigation
+    } else {
+      String msg = 'فشلت المصادقة بالبصمة';
+      if (result == BiometricAuthResult.notEnrolled) {
+        msg = 'لم يتم تسجيل بصمة في هذا الجهاز أو المحاكي. يرجى إعداد بصمة أولاً في إعدادات النظام أو استخدام الدخول التجريبي.';
+      } else if (result == BiometricAuthResult.notAvailable) {
+        msg = 'المصادقة بالبصمة غير مدعومة على هذا الجهاز.';
+      } else if (result == BiometricAuthResult.lockedOut) {
+        msg = 'تم قفل محاولات البصمة مؤقتاً لكثرة المحاولات الخاطئة.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -183,12 +219,19 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           } else if (state is Authenticated) {
             await _showBiometricPromptDialog();
+            if (context.mounted) {
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                AppRoutes.home,
+                (route) => false,
+              );
+            }
           }
         },
         builder: (context, state) {
           final isLoading = state is Authenticating;
           final cubit = context.read<AuthCubit>();
-          final showFingerprintButton = _canUseBiometrics && cubit.isBiometricEnabled;
+          final showFingerprintButton = _canUseBiometrics || cubit.isBiometricEnabled;
 
           return SafeArea(
             child: Center(
@@ -326,13 +369,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       ),
 
-                      // Biometric Login Button (if enabled)
+                      // Biometric Login Button (if enabled or supported)
                       if (showFingerprintButton) ...[
                         const SizedBox(height: 16),
                         OutlinedButton.icon(
-                          onPressed: isLoading
-                              ? null
-                              : () => context.read<AuthCubit>().authenticateWithBiometrics(),
+                          onPressed: isLoading ? null : _loginWithBiometrics,
                           icon: const Icon(Icons.fingerprint, color: AppTheme.primaryColor),
                           label: const Text(
                             'الدخول بالبصمة',
@@ -380,6 +421,47 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ],
+                      ),
+
+                      const SizedBox(height: 20),
+                      const Row(
+                        children: [
+                          Expanded(child: Divider()),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12.0),
+                            child: Text(
+                              'أو للدخول بدون إنترنت',
+                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ),
+                          Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Guest / Offline Mode Button
+                      OutlinedButton.icon(
+                        onPressed: isLoading
+                            ? null
+                            : () => context.read<AuthCubit>().continueAsGuest(),
+                        icon: const Icon(Icons.offline_bolt_outlined, color: AppTheme.primaryColor),
+                        label: const Text(
+                          'دخول تجريبي (وضع أوفلاين) 🚀',
+                          style: TextStyle(
+                            color: AppTheme.primaryColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.5),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
                       ),
                     ],
                   ),

@@ -1,3 +1,15 @@
 {
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "disabled",
+    "java.import.gradle.enabled": false,
+    "java.autobuild.enabled": false,
+    "java.import.exclusions": [
+        "**/node_modules/**",
+        "**/.metadata/**",
+        "**/archetype-resources/**",
+        "**/META-INF/maven/**",
+        "/**/test/**",
+        "**/android/**"
+    ],
+    "java.import.gradle.version": "9.1.0",
+    "java.import.gradle.home": "C:\\Users\\USER\\.gradle\\wrapper\\dists\\gradle-9.1.0-all\\7wzd0jkjit61aq2p43wpjgij9\\gradle-9.1.0"
 }

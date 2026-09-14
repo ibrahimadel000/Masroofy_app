@@ -185,5 +185,125 @@ void main() {
       // (7500 - 10000) / 10000 = -25%
       expect(res.weeklyChangePercent, closeTo(-25.0, 0.01));
     });
+
+    test('Computes past month daily average using full month days (e.g. 31 days for August)', () {
+      final augDate = DateTime(2026, 8, 1);
+      final transactions = [
+        TransactionModel(
+          id: 'aug1',
+          walletId: 'w1',
+          type: 'expense',
+          amount: 31000,
+          category: 'أكل',
+          date: DateTime(2026, 8, 15),
+          source: 'manual',
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      final res = StatsCalculator.calculate(
+        transactions: transactions,
+        wallets: [w1],
+        referenceDate: augDate,
+      );
+
+      expect(res.totalMonthlyExpense, 31000.0);
+      expect(res.totalDaysInMonth, 31);
+      // Daily average for past completed month must divide by 31, NOT 1
+      expect(res.dailyAverage, 1000.0);
+      // All 31 days must be initialized in dailySpendingMonth
+      expect(res.dailySpendingMonth.length, 31);
+      expect(res.dailySpendingMonth[15], 31000.0);
+      expect(res.dailySpendingMonth[1], 0.0);
+      expect(res.dailySpendingMonth[31], 0.0);
+    });
+
+    test('Computes Month-over-Month comparison correctly', () {
+      final septDate = DateTime(2026, 9, 13);
+      final transactions = [
+        // August expense: 20,000
+        TransactionModel(
+          id: 'aug1',
+          walletId: 'w1',
+          type: 'expense',
+          amount: 20000,
+          category: 'أكل',
+          date: DateTime(2026, 8, 10),
+          source: 'manual',
+          createdAt: DateTime.now(),
+        ),
+        // September expense: 30,000 (+50%)
+        TransactionModel(
+          id: 'sep1',
+          walletId: 'w1',
+          type: 'expense',
+          amount: 30000,
+          category: 'أكل',
+          date: DateTime(2026, 9, 5),
+          source: 'manual',
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      final res = StatsCalculator.calculate(
+        transactions: transactions,
+        wallets: [w1],
+        referenceDate: septDate,
+      );
+
+      expect(res.totalMonthlyExpense, 30000.0);
+      expect(res.totalPrevMonthExpense, 20000.0);
+      // (30000 - 20000) / 20000 = +50%
+      expect(res.monthlyChangePercent, closeTo(50.0, 0.01));
+    });
+
+    test('Filters stats by specific wallet correctly', () {
+      final transactions = [
+        TransactionModel(
+          id: '1',
+          walletId: 'w1',
+          type: 'expense',
+          amount: 25000,
+          category: 'أكل',
+          date: DateTime(2026, 9, 5),
+          source: 'manual',
+          createdAt: DateTime.now(),
+        ),
+        TransactionModel(
+          id: '2',
+          walletId: 'w2',
+          type: 'expense',
+          amount: 15000,
+          category: 'فواتير',
+          date: DateTime(2026, 9, 8),
+          source: 'manual',
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      // Filter by w1 only
+      final resW1 = StatsCalculator.calculate(
+        transactions: transactions,
+        wallets: [w1, w2],
+        referenceDate: refDate,
+        walletId: 'w1',
+      );
+
+      expect(resW1.totalMonthlyExpense, 25000.0);
+      expect(resW1.categorySpending.containsKey('فواتير'), false);
+      expect(resW1.categorySpending['أكل'], 25000.0);
+
+      // Filter by w2 only
+      final resW2 = StatsCalculator.calculate(
+        transactions: transactions,
+        wallets: [w1, w2],
+        referenceDate: refDate,
+        walletId: 'w2',
+      );
+
+      expect(resW2.totalMonthlyExpense, 15000.0);
+      expect(resW2.categorySpending.containsKey('أكل'), false);
+      expect(resW2.categorySpending['فواتير'], 15000.0);
+    });
   });
 }

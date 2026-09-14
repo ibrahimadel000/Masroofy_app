@@ -101,6 +101,8 @@ class SmsCubit extends Cubit<SmsState> {
           source: 'sms',
           smsKey: item.data.smsKey,
           createdAt: DateTime.now(),
+          rawSmsBody: item.data.rawBody,
+          rawSmsSender: item.data.rawSender,
         );
 
         await transactionRepository.saveTransaction(tx);
@@ -146,6 +148,8 @@ class SmsCubit extends Cubit<SmsState> {
           source: 'sms',
           smsKey: item.data.smsKey,
           createdAt: DateTime.now(),
+          rawSmsBody: item.data.rawBody,
+          rawSmsSender: item.data.rawSender,
         );
 
         await transactionRepository.saveTransaction(tx);

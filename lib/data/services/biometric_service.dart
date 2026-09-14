@@ -1,5 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
+
+enum BiometricAuthResult {
+  success,
+  failed,
+  notEnrolled,
+  notAvailable,
+  lockedOut,
+  error,
+}
 
 class BiometricService {
   final LocalAuthentication _auth;
@@ -9,10 +19,21 @@ class BiometricService {
 
   Future<bool> isBiometricsAvailable() async {
     try {
+      final isSupported = await _auth.isDeviceSupported();
       final canCheck = await _auth.canCheckBiometrics;
-      final isDeviceSupported = await _auth.isDeviceSupported();
-      return canCheck && isDeviceSupported;
-    } on PlatformException {
+      final biometrics = await _auth.getAvailableBiometrics();
+      return isSupported || canCheck || biometrics.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> hasEnrolledBiometrics() async {
+    try {
+      final canCheck = await _auth.canCheckBiometrics;
+      final biometrics = await _auth.getAvailableBiometrics();
+      return canCheck || biometrics.isNotEmpty;
+    } catch (_) {
       return false;
     }
   }
@@ -20,19 +41,37 @@ class BiometricService {
   Future<bool> authenticate({
     String localizedReason = 'يرجى تأكيد هويتك بالبصمة للمتابعة',
   }) async {
-    try {
-      final available = await isBiometricsAvailable();
-      if (!available) return false;
+    final result = await authenticateWithDetails(localizedReason: localizedReason);
+    return result == BiometricAuthResult.success;
+  }
 
-      return await _auth.authenticate(
+  Future<BiometricAuthResult> authenticateWithDetails({
+    String localizedReason = 'يرجى تأكيد هويتك بالبصمة للمتابعة',
+  }) async {
+    try {
+      final authenticated = await _auth.authenticate(
         localizedReason: localizedReason,
         options: const AuthenticationOptions(
           stickyAuth: true,
           biometricOnly: false,
+          useErrorDialogs: true,
         ),
       );
-    } on PlatformException {
-      return false;
+
+      return authenticated ? BiometricAuthResult.success : BiometricAuthResult.failed;
+    } on PlatformException catch (e) {
+      debugPrint('Biometric PlatformException: code=${e.code}, message=${e.message}');
+      if (e.code == 'NotEnrolled' || e.code == 'PasscodeNotSet') {
+        return BiometricAuthResult.notEnrolled;
+      } else if (e.code == 'LockedOut' || e.code == 'PermanentlyLockedOut') {
+        return BiometricAuthResult.lockedOut;
+      } else if (e.code == 'NotAvailable') {
+        return BiometricAuthResult.notAvailable;
+      }
+      return BiometricAuthResult.error;
+    } catch (e) {
+      debugPrint('Biometric unexpected error: $e');
+      return BiometricAuthResult.error;
     }
   }
 }

@@ -27,7 +27,7 @@ class BalanceCalculator {
     return balance;
   }
 
-  /// Pure function: totalBalance = Σ walletBalance across all wallets
+  /// Pure function: totalBalance = Σ walletBalance across all wallets (for backward-compatibility)
   static double calculateTotalBalance({
     required List<Wallet> wallets,
     required List<TransactionModel> allTransactions,
@@ -44,6 +44,25 @@ class BalanceCalculator {
     }
 
     return total;
+  }
+
+  /// Returns wallet balances grouped by currency code (never mixes different currencies!)
+  static Map<String, double> calculateTotalsByCurrency({
+    required List<Wallet> wallets,
+    required List<TransactionModel> allTransactions,
+  }) {
+    final Map<String, double> totals = {};
+    for (final wallet in wallets) {
+      final walletTransactions =
+          allTransactions.where((tx) => tx.walletId == wallet.id).toList();
+      final bal = calculateWalletBalance(
+        openingBalance: wallet.openingBalance,
+        transactions: walletTransactions,
+      );
+      final curr = wallet.currencyCode;
+      totals[curr] = (totals[curr] ?? 0.0) + bal;
+    }
+    return totals;
   }
 
   /// Calculate total spending for today

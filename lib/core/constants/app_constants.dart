@@ -72,14 +72,66 @@ class AppConstants {
     return Icons.account_balance_wallet_rounded;
   }
 
+  // Currencies
+  static const Map<String, String> currencySymbols = {
+    'YER': 'ر.ي',
+    'SAR': 'ر.س',
+    'USD': '\$',
+  };
+
+  static const Map<String, String> currencyNames = {
+    'YER': 'ريال يمني (YER)',
+    'SAR': 'ريال سعودي (SAR)',
+    'USD': 'دولار أمريكي (USD)',
+  };
+
+  static const List<String> arabicMonths = [
+    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر',
+  ];
+
+  static const List<String> arabicWeekdaysShort = [
+    'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد',
+  ];
+
   // Number / Currency Formatter
-  static String formatCurrency(double amount) {
-    final formatter = NumberFormat('#,##0.##', 'ar');
-    return '${formatter.format(amount)} ر.ي';
+  static String formatCurrency(double amount, [String currencyCode = 'YER']) {
+    try {
+      final formatter = NumberFormat('#,##0.##', 'ar');
+      final symbol = currencySymbols[currencyCode] ?? 'ر.ي';
+      return '${formatter.format(amount)} $symbol';
+    } catch (_) {
+      final symbol = currencySymbols[currencyCode] ?? 'ر.ي';
+      return '${amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2)} $symbol';
+    }
   }
 
+  // Date Formatter
   static String formatDate(DateTime date) {
-    final formatter = DateFormat('yyyy/MM/dd', 'ar');
-    return formatter.format(date);
+    try {
+      final formatter = DateFormat('yyyy/MM/dd', 'ar');
+      return formatter.format(date);
+    } catch (_) {
+      final m = date.month.toString().padLeft(2, '0');
+      final d = date.day.toString().padLeft(2, '0');
+      return '${date.year}/$m/$d';
+    }
+  }
+
+  static String formatMonthYear(DateTime date) {
+    try {
+      return DateFormat('MMMM yyyy', 'ar').format(date);
+    } catch (_) {
+      final month = arabicMonths[(date.month - 1) % 12];
+      return '$month ${date.year}';
+    }
+  }
+
+  static String formatShortWeekday(DateTime date) {
+    try {
+      return DateFormat('E', 'ar').format(date);
+    } catch (_) {
+      return arabicWeekdaysShort[(date.weekday - 1) % 7];
+    }
   }
 }

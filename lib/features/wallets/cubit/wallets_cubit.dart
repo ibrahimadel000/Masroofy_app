@@ -57,6 +57,7 @@ class WalletsCubit extends Cubit<WalletsState> {
     required int colorValue,
     required int iconCodePoint,
     required double openingBalance,
+    String currencyCode = 'YER',
   }) async {
     try {
       final wallet = Wallet(
@@ -66,6 +67,7 @@ class WalletsCubit extends Cubit<WalletsState> {
         colorValue: colorValue,
         iconCodePoint: iconCodePoint,
         openingBalance: openingBalance,
+        currencyCode: currencyCode,
         createdAt: DateTime.now(),
       );
       await repository.saveWallet(wallet);

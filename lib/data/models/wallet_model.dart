@@ -28,6 +28,9 @@ class Wallet extends HiveObject {
   @HiveField(7)
   final DateTime createdAt;
 
+  @HiveField(8)
+  final String currencyCode; // YER | SAR | USD
+
   Wallet({
     required this.id,
     required this.name,
@@ -37,6 +40,7 @@ class Wallet extends HiveObject {
     required this.openingBalance,
     this.isFavorite = false,
     required this.createdAt,
+    this.currencyCode = 'YER',
   });
 
   Wallet copyWith({
@@ -48,6 +52,7 @@ class Wallet extends HiveObject {
     double? openingBalance,
     bool? isFavorite,
     DateTime? createdAt,
+    String? currencyCode,
   }) {
     return Wallet(
       id: id ?? this.id,
@@ -58,6 +63,7 @@ class Wallet extends HiveObject {
       openingBalance: openingBalance ?? this.openingBalance,
       isFavorite: isFavorite ?? this.isFavorite,
       createdAt: createdAt ?? this.createdAt,
+      currencyCode: currencyCode ?? this.currencyCode,
     );
   }
 
@@ -71,6 +77,7 @@ class Wallet extends HiveObject {
       'openingBalance': openingBalance,
       'isFavorite': isFavorite,
       'createdAt': createdAt.toIso8601String(),
+      'currencyCode': currencyCode,
     };
   }
 
@@ -84,6 +91,7 @@ class Wallet extends HiveObject {
       openingBalance: (map['openingBalance'] as num).toDouble(),
       isFavorite: (map['isFavorite'] as bool?) ?? false,
       createdAt: DateTime.parse(map['createdAt'] as String),
+      currencyCode: (map['currencyCode'] as String?) ?? 'YER',
     );
   }
 }

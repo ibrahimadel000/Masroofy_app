@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
@@ -49,6 +50,19 @@ class _CommissionScreenState extends State<CommissionScreen> {
     super.initState();
     _selectedFromWallet = _rates[0];
     _selectedToWallet = _rates[1];
+    _loadPersistedRates();
+  }
+
+  Future<void> _loadPersistedRates() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      for (final rate in _rates) {
+        final saved = prefs.getDouble('wallet_fee_${rate.name}');
+        if (saved != null) {
+          rate.feePercentage = saved;
+        }
+      }
+    });
   }
 
   @override
@@ -92,7 +106,7 @@ class _CommissionScreenState extends State<CommissionScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'أدخل النسبة المئوية المعتمدة للتحويل من هذه المحفظة:',
+              'أدخل النسبة المئوية المعتمدة للتحويل من هذه المحفظة (يتم حفظها محلياً في جهازك):',
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 12),
@@ -115,16 +129,18 @@ class _CommissionScreenState extends State<CommissionScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
-            onPressed: () {
+            onPressed: () async {
               final newFee = double.tryParse(controller.text.trim());
               if (newFee != null && newFee >= 0) {
                 setState(() {
                   _selectedFromWallet.feePercentage = newFee;
                 });
-                Navigator.pop(ctx);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setDouble('wallet_fee_${_selectedFromWallet.name}', newFee);
+                if (ctx.mounted) Navigator.pop(ctx);
               }
             },
-            child: const Text('حفظ', style: TextStyle(color: Colors.white)),
+            child: const Text('حفظ محلياً', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

@@ -118,6 +118,16 @@ class TransactionsCubit extends Cubit<TransactionsState> {
     } catch (_) {}
   }
 
+  Future<void> updateTransaction(TransactionModel tx) async {
+    try {
+      await repository.saveTransaction(tx);
+      loadTransactions();
+      _checkLowBalanceAlert(tx);
+    } catch (e) {
+      emit(TransactionsError('فشل تعديل الحركة: $e'));
+    }
+  }
+
   Future<void> deleteTransaction(String id) async {
     try {
       await repository.deleteTransaction(id);

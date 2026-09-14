@@ -4,6 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/app.dart';
 import 'package:mizaan/core/utils/validators.dart';
 import 'package:mizaan/data/repositories/auth_repository.dart';
+import 'package:mizaan/data/services/biometric_service.dart';
+import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
+import 'package:mizaan/features/auth/cubit/auth_state.dart';
+import 'package:mizaan/features/auth/screens/biometric_gate_screen.dart';
 import 'package:mizaan/features/auth/screens/login_screen.dart';
 
 class FakeAuthRepository extends AuthRepository {
@@ -33,6 +37,27 @@ class FakeAuthRepository extends AuthRepository {
   Future<void> signOut() async {
     _user = null;
   }
+}
+
+class FakeBiometricService extends BiometricService {
+  final BiometricAuthResult resultToReturn;
+  final bool available;
+
+  FakeBiometricService({
+    this.resultToReturn = BiometricAuthResult.success,
+    this.available = true,
+  });
+
+  @override
+  Future<bool> isBiometricsAvailable() async => available;
+
+  @override
+  Future<bool> hasEnrolledBiometrics() async => available;
+
+  @override
+  Future<BiometricAuthResult> authenticateWithDetails({
+    String localizedReason = 'يرجى تأكيد هويتك بالبصمة للمتابعة',
+  }) async => resultToReturn;
 }
 
 void main() {
@@ -96,6 +121,12 @@ void main() {
         ),
         'تعذر الاتصال بالشبكة، يرجى التأكد من اتصال الإنترنت',
       );
+      expect(
+        AuthRepository.mapFirebaseError(
+          FirebaseAuthException(code: 'operation-not-allowed'),
+        ),
+        contains('تسجيل الدخول بالبريد غير مفعّل'),
+      );
     });
   });
 
@@ -137,6 +168,107 @@ void main() {
       expect(find.text('الاسم الكامل'), findsOneWidget);
       expect(find.text('تأكيد كلمة المرور'), findsOneWidget);
       expect(find.text('إنشاء الحساب'), findsOneWidget);
+    });
+
+    testWidgets('Guest login button enters app', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final fakeAuth = FakeAuthRepository();
+
+      await tester.pumpWidget(
+        MizaanApp(prefs: prefs, authRepository: fakeAuth, homeOverride: const LoginScreen()),
+      );
+      await tester.pumpAndSettle();
+
+      final guestBtn = find.text('دخول تجريبي (وضع أوفلاين) 🚀');
+      expect(guestBtn, findsOneWidget);
+
+      await tester.ensureVisible(guestBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(guestBtn);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
+
+      expect(find.byType(LoginScreen), findsNothing);
+    });
+
+    testWidgets('Biometric button appears on LoginScreen and triggers auth', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({'biometricEnabled': true});
+      final prefs = await SharedPreferences.getInstance();
+      final fakeAuth = FakeAuthRepository();
+      final fakeBio = FakeBiometricService(resultToReturn: BiometricAuthResult.success);
+
+      await tester.pumpWidget(
+        MizaanApp(
+          prefs: prefs,
+          authRepository: fakeAuth,
+          biometricService: fakeBio,
+          homeOverride: const LoginScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final bioBtn = find.text('الدخول بالبصمة');
+      expect(bioBtn, findsOneWidget);
+
+      await tester.tap(bioBtn);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
+
+      expect(find.byType(LoginScreen), findsNothing);
+    });
+
+    testWidgets('BiometricGateScreen renders skip button and title', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final fakeAuth = FakeAuthRepository();
+      final fakeBio = FakeBiometricService(resultToReturn: BiometricAuthResult.notEnrolled);
+
+      await tester.pumpWidget(
+        MizaanApp(
+          prefs: prefs,
+          authRepository: fakeAuth,
+          biometricService: fakeBio,
+          homeOverride: const BiometricGateScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('ميزان مقفل للأمان'), findsOneWidget);
+      expect(find.text('تأكيد البصمة'), findsOneWidget);
+      expect(find.text('تخطي البصمة ومتابعة الدخول 🚀'), findsOneWidget);
+    });
+  });
+
+  group('AuthCubit Biometric Tests', () {
+    test('authenticateWithBiometrics enables biometrics on success', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cubit = AuthCubit(
+        authRepository: FakeAuthRepository(),
+        biometricService: FakeBiometricService(resultToReturn: BiometricAuthResult.success),
+        prefs: prefs,
+      );
+
+      final result = await cubit.authenticateWithBiometrics();
+      expect(result, BiometricAuthResult.success);
+      expect(cubit.isBiometricEnabled, isTrue);
+      expect(cubit.state, isA<Authenticated>());
+    });
+
+    test('authenticateWithBiometrics handles notEnrolled gracefully', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final cubit = AuthCubit(
+        authRepository: FakeAuthRepository(),
+        biometricService: FakeBiometricService(resultToReturn: BiometricAuthResult.notEnrolled),
+        prefs: prefs,
+      );
+
+      final result = await cubit.authenticateWithBiometrics();
+      expect(result, BiometricAuthResult.notEnrolled);
+      expect(cubit.isBiometricEnabled, isFalse);
+      expect(cubit.state, isA<AuthInitial>());
     });
   });
 }

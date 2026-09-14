@@ -178,5 +178,136 @@ void main() {
       expect(reconstituted.source, 'sms');
       expect(reconstituted.smsKey, 'hash-abc-123');
     });
+
+    test('TransactionModel preserves rawSmsBody and rawSmsSender in serialization', () {
+      final now = DateTime.now();
+      final tx = TransactionModel(
+        id: 'tx-sms',
+        walletId: 'w1',
+        type: 'expense',
+        amount: 1500.0,
+        category: 'تحويل',
+        date: now,
+        source: 'sms',
+        rawSmsBody: 'تم تحويل مبلغ 1500 ريال بنجاح',
+        rawSmsSender: 'Kuraimi',
+        createdAt: now,
+      );
+
+      final map = tx.toMap();
+      final reconstituted = TransactionModel.fromMap(map);
+
+      expect(reconstituted.rawSmsBody, 'تم تحويل مبلغ 1500 ريال بنجاح');
+      expect(reconstituted.rawSmsSender, 'Kuraimi');
+    });
+
+    test('Wallet supports currencyCode serialization and defaults to YER', () {
+      final now = DateTime.now();
+      final sarWallet = Wallet(
+        id: 'w-sar',
+        name: 'حساب سعودي',
+        type: 'kuraimi',
+        currencyCode: 'SAR',
+        colorValue: 0xFF1B5E20,
+        iconCodePoint: 1234,
+        openingBalance: 1000.0,
+        createdAt: now,
+      );
+
+      final map = sarWallet.toMap();
+      final reconstituted = Wallet.fromMap(map);
+
+      expect(reconstituted.currencyCode, 'SAR');
+
+      // Test default to YER when currencyCode is missing from legacy map
+      final legacyMap = Map<String, dynamic>.from(map)..remove('currencyCode');
+      final legacyReconstituted = Wallet.fromMap(legacyMap);
+      expect(legacyReconstituted.currencyCode, 'YER');
+    });
+  });
+
+  group('Multi-Currency Grouping Tests (calculateTotalsByCurrency)', () {
+    test('Calculates balance grouped by currency without cross-summing', () {
+      final wallets = [
+        Wallet(
+          id: 'w-yer',
+          name: 'كاش يمني',
+          type: 'kash',
+          currencyCode: 'YER',
+          colorValue: 0xFF0E7C61,
+          iconCodePoint: 0xe000,
+          openingBalance: 200000.0,
+          createdAt: DateTime.now(),
+        ),
+        Wallet(
+          id: 'w-sar',
+          name: 'كاش سعودي',
+          type: 'kash',
+          currencyCode: 'SAR',
+          colorValue: 0xFF14A37F,
+          iconCodePoint: 0xe001,
+          openingBalance: 1500.0,
+          createdAt: DateTime.now(),
+        ),
+        Wallet(
+          id: 'w-usd',
+          name: 'دولار',
+          type: 'kuraimi',
+          currencyCode: 'USD',
+          colorValue: 0xFF2E7D32,
+          iconCodePoint: 0xe002,
+          openingBalance: 500.0,
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      final transactions = <TransactionModel>[
+        // YER transactions
+        TransactionModel(
+          id: 'tx-yer-1',
+          walletId: 'w-yer',
+          type: 'income',
+          amount: 50000.0,
+          category: 'راتب',
+          source: 'manual',
+          date: DateTime.now(),
+          createdAt: DateTime.now(),
+        ),
+        TransactionModel(
+          id: 'tx-yer-2',
+          walletId: 'w-yer',
+          type: 'expense',
+          amount: 20000.0,
+          category: 'بقالة',
+          source: 'manual',
+          date: DateTime.now(),
+          createdAt: DateTime.now(),
+        ),
+        // SAR transactions
+        TransactionModel(
+          id: 'tx-sar-1',
+          walletId: 'w-sar',
+          type: 'expense',
+          amount: 200.0,
+          category: 'تسوق',
+          source: 'manual',
+          date: DateTime.now(),
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      final totals = BalanceCalculator.calculateTotalsByCurrency(
+        wallets: wallets,
+        allTransactions: transactions,
+      );
+
+      // YER: 200,000 + 50,000 - 20,000 = 230,000
+      expect(totals['YER'], 230000.0);
+      // SAR: 1,500 - 200 = 1,300
+      expect(totals['SAR'], 1300.0);
+      // USD: 500 (no txs)
+      expect(totals['USD'], 500.0);
+    });
   });
 }
+

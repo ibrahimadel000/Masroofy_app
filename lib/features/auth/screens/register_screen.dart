@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/utils/validators.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
@@ -57,7 +58,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             );
           } else if (state is Authenticated) {
-            Navigator.pop(context);
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              AppRoutes.home,
+              (route) => false,
+            );
           }
         },
         builder: (context, state) {

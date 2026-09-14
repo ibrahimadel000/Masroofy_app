@@ -18,6 +18,8 @@ import 'package:mizaan/features/stats/screens/stats_screen.dart';
 import 'package:mizaan/features/wallets/screens/add_wallet_screen.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/features/wallets/screens/wallet_details_screen.dart';
+import 'package:mizaan/features/transactions/screens/transactions_history_screen.dart';
+import 'package:mizaan/features/transactions/widgets/transaction_detail_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -142,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
         ],
       ),
-      floatingActionButton: _currentTabIndex == 0
+      floatingActionButton: (_currentTabIndex == 0 || _currentTabIndex == 1)
           ? FloatingActionButton.extended(
               backgroundColor: AppTheme.primaryColor,
               foregroundColor: Colors.white,
@@ -164,6 +166,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home_rounded),
             label: 'الرئيسية',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long_rounded),
+            label: 'الحركات',
           ),
           NavigationDestination(
             icon: Icon(Icons.pie_chart_outline_rounded),
@@ -214,21 +221,29 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCurrentTab() {
     switch (_currentTabIndex) {
       case 0:
-        return const _HomeMainView();
+        return _HomeMainView(
+          onNavigateToTransactions: () => setState(() => _currentTabIndex = 1),
+        );
       case 1:
-        return const StatsScreen(isEmbedded: true);
+        return const TransactionsHistoryScreen(isEmbedded: true);
       case 2:
-        return const FavoritesScreen(isEmbedded: true);
+        return const StatsScreen(isEmbedded: true);
       case 3:
+        return const FavoritesScreen(isEmbedded: true);
+      case 4:
         return const SettingsScreen(isEmbedded: true);
       default:
-        return const _HomeMainView();
+        return _HomeMainView(
+          onNavigateToTransactions: () => setState(() => _currentTabIndex = 1),
+        );
     }
   }
 }
 
 class _HomeMainView extends StatelessWidget {
-  const _HomeMainView();
+  final VoidCallback onNavigateToTransactions;
+
+  const _HomeMainView({required this.onNavigateToTransactions});
 
   @override
   Widget build(BuildContext context) {
@@ -240,7 +255,7 @@ class _HomeMainView extends StatelessWidget {
           builder: (context, txState) {
             final transactions = txState is TransactionsLoaded ? txState.transactions : <TransactionModel>[];
 
-            final totalBalance = BalanceCalculator.calculateTotalBalance(
+            final totalsByCurrency = BalanceCalculator.calculateTotalsByCurrency(
               wallets: wallets,
               allTransactions: transactions,
             );
@@ -252,13 +267,13 @@ class _HomeMainView extends StatelessWidget {
                 context.read<TransactionsCubit>().loadTransactions();
               },
               child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
+                physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
                 padding: const EdgeInsets.symmetric(vertical: 12.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // 1. Total Balance Card
-                    _buildTotalBalanceCard(totalBalance, todaySpending),
+                    _buildTotalBalanceCard(totalsByCurrency, todaySpending),
 
                     const SizedBox(height: 24),
 
@@ -324,9 +339,13 @@ class _HomeMainView extends StatelessWidget {
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                           if (transactions.isNotEmpty)
-                            Text(
-                              '${transactions.length} حركة',
-                              style: const TextStyle(color: Colors.grey, fontSize: 13),
+                            TextButton.icon(
+                              onPressed: onNavigateToTransactions,
+                              icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                              label: Text(
+                                'عرض الكل (${transactions.length})',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
                             ),
                         ],
                       ),
@@ -335,7 +354,9 @@ class _HomeMainView extends StatelessWidget {
                     const SizedBox(height: 12),
 
                     // Recent Transactions List
-                    _buildRecentTransactionsList(transactions, wallets),
+                    _buildRecentTransactionsList(context, transactions, wallets),
+
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),
@@ -346,7 +367,19 @@ class _HomeMainView extends StatelessWidget {
     );
   }
 
-  Widget _buildTotalBalanceCard(double totalBalance, double todaySpending) {
+  Widget _buildTotalBalanceCard(Map<String, double> totalsByCurrency, double todaySpending) {
+    final entries = totalsByCurrency.entries.toList();
+    final hasMultipleCurrencies = entries.length > 1;
+
+    // Primary currency (YER if exists, else first)
+    final primaryEntry = entries.firstWhere(
+      (e) => e.key == 'YER',
+      orElse: () => entries.isNotEmpty ? entries.first : const MapEntry('YER', 0.0),
+    );
+
+    // Other currencies
+    final otherEntries = entries.where((e) => e.key != primaryEntry.key).toList();
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       padding: const EdgeInsets.all(22.0),
@@ -391,7 +424,7 @@ class _HomeMainView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            AppConstants.formatCurrency(totalBalance),
+            AppConstants.formatCurrency(primaryEntry.value, primaryEntry.key),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 32,
@@ -399,6 +432,30 @@ class _HomeMainView extends StatelessWidget {
               letterSpacing: 0.5,
             ),
           ),
+          if (hasMultipleCurrencies) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: otherEntries.map((e) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '+ ${AppConstants.formatCurrency(e.value, e.key)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -586,7 +643,7 @@ class _HomeMainView extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        AppConstants.formatCurrency(balance),
+                        AppConstants.formatCurrency(balance, wallet.currencyCode),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -607,125 +664,212 @@ class _HomeMainView extends StatelessWidget {
   }
 
   Widget _buildRecentTransactionsList(
+    BuildContext context,
     List<TransactionModel> transactions,
     List<Wallet> wallets,
   ) {
     if (transactions.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 36.0),
-          child: Column(
-            children: [
-              Icon(
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        padding: const EdgeInsets.all(22.0),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
                 Icons.receipt_long_rounded,
-                size: 56,
-                color: Colors.grey.withValues(alpha: 0.4),
+                size: 44,
+                color: AppTheme.primaryColor,
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'لا توجد حركات مسجلة بعد',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'اضغط على زر ➕ حركة لتسجيل أول حركة مالية',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'لا توجد حركات مسجلة بعد',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'سجّل حركاتك النقدية يدوياً أو استورد رسائل المحافظ البنكية بضغطة زر.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('تسجيل حركة', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                if (Platform.isAndroid) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pushNamed(context, AppRoutes.smsSync);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.primaryColor,
+                        side: const BorderSide(color: AppTheme.primaryColor),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      icon: const Icon(Icons.mark_email_read_rounded, size: 18),
+                      label: const Text('مزامنة SMS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       );
     }
 
     final recent = transactions.take(15).toList();
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      itemCount: recent.length,
-      itemBuilder: (context, index) {
-        final tx = recent[index];
-        final wallet = wallets.cast<Wallet?>().firstWhere(
-              (w) => w?.id == tx.walletId,
-              orElse: () => null,
-            );
+    return Column(
+      children: [
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          itemCount: recent.length,
+          itemBuilder: (context, index) {
+            final tx = recent[index];
+            final wallet = wallets.cast<Wallet?>().firstWhere(
+                  (w) => w?.id == tx.walletId,
+                  orElse: () => null,
+                );
 
-        final isIncome = tx.type == 'income';
-        final isAdjustment = tx.type == 'adjustment';
+            final isIncome = tx.type == 'income';
+            final isAdjustment = tx.type == 'adjustment';
 
-        final Color amountColor = isIncome
-            ? AppTheme.primaryColor
-            : isAdjustment
-                ? Colors.blue.shade700
-                : Colors.red.shade700;
-        final String prefix = isIncome
-            ? '+'
-            : isAdjustment
-                ? (tx.amount >= 0 ? '+' : '')
-                : '-';
+            final Color amountColor = isIncome
+                ? AppTheme.primaryColor
+                : isAdjustment
+                    ? Colors.blue.shade700
+                    : Colors.red.shade700;
+            final String prefix = isIncome
+                ? '+'
+                : isAdjustment
+                    ? (tx.amount >= 0 ? '+' : '')
+                    : '-';
 
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 5.0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: amountColor.withValues(alpha: 0.12),
-              child: Icon(
-                AppConstants.getCategoryIcon(tx.category),
-                color: amountColor,
-                size: 22,
-              ),
-            ),
-            title: Row(
-              children: [
-                Text(
-                  tx.category,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                if (tx.source == 'sms') ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('📩', style: TextStyle(fontSize: 10)),
-                        SizedBox(width: 2),
-                        Text(
-                          'SMS',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.blue,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 5.0),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: ListTile(
+                onTap: () => TransactionDetailSheet.show(context, tx),
+                leading: CircleAvatar(
+                  backgroundColor: amountColor.withValues(alpha: 0.12),
+                  child: Icon(
+                    AppConstants.getCategoryIcon(tx.category),
+                    color: amountColor,
+                    size: 22,
                   ),
-                ],
-              ],
-            ),
-            subtitle: Text(
-              '${wallet?.name ?? "محفظة"} • ${AppConstants.formatDate(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: Text(
-              '$prefix${AppConstants.formatCurrency(tx.amount.abs())}',
-              style: TextStyle(
-                color: amountColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
+                ),
+                title: Row(
+                  children: [
+                    Text(
+                      tx.category,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    if (tx.source == 'sms') ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('📩', style: TextStyle(fontSize: 10)),
+                            SizedBox(width: 2),
+                            Text(
+                              'SMS',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.blue,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                subtitle: Text(
+                  '${wallet?.name ?? "محفظة"} • ${AppConstants.formatDate(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: Text(
+                  '$prefix${AppConstants.formatCurrency(tx.amount.abs())}',
+                  style: TextStyle(
+                    color: amountColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
               ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primaryColor,
+              side: const BorderSide(color: AppTheme.primaryColor),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
+            icon: const Icon(Icons.receipt_long_rounded, size: 18),
+            label: Text(
+              transactions.length > 15
+                  ? 'عرض كل الحركات (${transactions.length} حركة) ←'
+                  : 'فتح والبحث في سجل الحركات ←',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            onPressed: onNavigateToTransactions,
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }

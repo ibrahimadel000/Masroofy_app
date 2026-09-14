@@ -17,6 +17,7 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
   final _openingBalanceController = TextEditingController();
 
   String _selectedType = 'kash';
+  String _selectedCurrency = 'YER';
   Color _selectedColor = AppConstants.walletColors[0];
   IconData _selectedIcon = AppConstants.walletIcons[0];
 
@@ -36,6 +37,7 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
             colorValue: _selectedColor.toARGB32(),
             iconCodePoint: _selectedIcon.codePoint,
             openingBalance: balance,
+            currencyCode: _selectedCurrency,
           );
       Navigator.pop(context);
     }
@@ -100,7 +102,7 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'الرصيد الافتتاحي: ${_openingBalanceController.text.isEmpty ? "0" : _openingBalanceController.text} ر.ي',
+                        'الرصيد الافتتاحي: ${_openingBalanceController.text.isEmpty ? "0" : _openingBalanceController.text} ${AppConstants.currencySymbols[_selectedCurrency] ?? "ر.ي"}',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.85),
                           fontSize: 14,
@@ -243,6 +245,39 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
                 ),
                 const SizedBox(height: 20),
 
+                // Currency Selector
+                const Text(
+                  'عملة المحفظة',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: AppConstants.currencyNames.entries.map((entry) {
+                    final isSelected = _selectedCurrency == entry.key;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: ChoiceChip(
+                          label: Text(
+                            AppConstants.currencySymbols[entry.key] ?? entry.key,
+                            style: TextStyle(
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? AppTheme.primaryColor : null,
+                            ),
+                          ),
+                          selected: isSelected,
+                          selectedColor: AppTheme.primaryColor.withValues(alpha: 0.18),
+                          checkmarkColor: AppTheme.primaryColor,
+                          onSelected: (val) {
+                            if (val) setState(() => _selectedCurrency = entry.key);
+                          },
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+
                 // Opening Balance Field
                 TextFormField(
                   controller: _openingBalanceController,
@@ -259,10 +294,10 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
                     return null;
                   },
                   decoration: InputDecoration(
-                    labelText: 'الرصيد الافتتاحي (ر.ي)',
+                    labelText: 'الرصيد الافتتاحي (${AppConstants.currencySymbols[_selectedCurrency] ?? "ر.ي"})',
                     hintText: 'مثال: 150000',
                     prefixIcon: const Icon(Icons.attach_money_rounded),
-                    suffixText: 'ر.ي',
+                    suffixText: AppConstants.currencySymbols[_selectedCurrency] ?? 'ر.ي',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),

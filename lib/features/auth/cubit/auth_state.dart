@@ -15,22 +15,23 @@ class Unauthenticated extends AuthState {}
 class Authenticating extends AuthState {}
 
 class Authenticated extends AuthState {
-  final User user;
+  final User? user;
   final bool isFirstLogin;
+  final bool isGuest;
 
-  const Authenticated(this.user, {this.isFirstLogin = false});
+  const Authenticated(this.user, {this.isFirstLogin = false, this.isGuest = false});
 
   @override
-  List<Object?> get props => [user.uid, isFirstLogin];
+  List<Object?> get props => [user?.uid, isFirstLogin, isGuest];
 }
 
 class BiometricRequired extends AuthState {
-  final User user;
+  final User? user;
 
   const BiometricRequired(this.user);
 
   @override
-  List<Object?> get props => [user.uid];
+  List<Object?> get props => [user?.uid];
 }
 
 class AuthError extends AuthState {

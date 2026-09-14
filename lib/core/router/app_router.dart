@@ -12,6 +12,7 @@ import 'package:mizaan/features/settings/screens/settings_screen.dart';
 import 'package:mizaan/features/sms/screens/sms_sync_screen.dart';
 import 'package:mizaan/features/stats/screens/stats_screen.dart';
 import 'package:mizaan/features/wallets/screens/add_wallet_screen.dart';
+import 'package:mizaan/features/transactions/screens/transactions_history_screen.dart';
 import 'package:mizaan/features/wallets/screens/wallet_details_screen.dart';
 
 class AppRoutes {
@@ -22,6 +23,7 @@ class AppRoutes {
   static const String home = '/home';
   static const String addWallet = '/add-wallet';
   static const String addTransaction = '/add-transaction';
+  static const String transactions = '/transactions';
   static const String favorites = '/favorites';
   static const String stats = '/stats';
   static const String commission = '/commission';
@@ -73,6 +75,12 @@ class AppRoutes {
         final initialWalletId = routeSettings.arguments as String?;
         return MaterialPageRoute(
           builder: (_) => AddTransactionScreen(initialWalletId: initialWalletId),
+          settings: routeSettings,
+        );
+      case transactions:
+        final initialWalletId = routeSettings.arguments as String?;
+        return MaterialPageRoute(
+          builder: (_) => TransactionsHistoryScreen(isEmbedded: false, initialWalletId: initialWalletId),
           settings: routeSettings,
         );
       case favorites:

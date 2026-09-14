@@ -7,6 +7,7 @@ import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/transactions/screens/add_transaction_screen.dart';
+import 'package:mizaan/features/transactions/widgets/transaction_detail_sheet.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
 
 class WalletDetailsScreen extends StatelessWidget {
@@ -236,8 +237,8 @@ class WalletDetailsScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  AppConstants.walletTypes[wallet.type] ?? 'محفظة',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  '${AppConstants.walletTypes[wallet.type] ?? "محفظة"} (${AppConstants.currencySymbols[wallet.currencyCode] ?? wallet.currencyCode})',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
@@ -249,7 +250,7 @@ class WalletDetailsScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            AppConstants.formatCurrency(liveBalance),
+                            AppConstants.formatCurrency(liveBalance, wallet.currencyCode),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 28,
@@ -334,6 +335,7 @@ class WalletDetailsScreen extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                   child: ListTile(
+                                    onTap: () => TransactionDetailSheet.show(context, tx),
                                     leading: CircleAvatar(
                                       backgroundColor: amountColor.withValues(alpha: 0.12),
                                       child: Icon(

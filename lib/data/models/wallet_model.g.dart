@@ -25,13 +25,14 @@ class WalletAdapter extends TypeAdapter<Wallet> {
       openingBalance: fields[5] as double,
       isFavorite: fields[6] as bool,
       createdAt: fields[7] as DateTime,
+      currencyCode: (fields[8] as String?) ?? 'YER',
     );
   }
 
   @override
   void write(BinaryWriter writer, Wallet obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class WalletAdapter extends TypeAdapter<Wallet> {
       ..writeByte(6)
       ..write(obj.isFavorite)
       ..writeByte(7)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(8)
+      ..write(obj.currencyCode);
   }
 
   @override

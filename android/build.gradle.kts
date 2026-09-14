@@ -38,6 +38,10 @@ subprojects {
                     txt = txt.replace("android {", "android {\n    namespace 'com.shounakmulay.telephony'")
                     modified = true
                 }
+                if (txt.contains("kotlinOptions")) {
+                    txt = txt.replace(Regex("""kotlinOptions\s*\{[\s\S]*?\}"""), "// kotlinOptions removed")
+                    modified = true
+                }
                 if (txt.contains("compileKotlin")) {
                     txt = txt.replace(Regex("""compileKotlin\s*\{[\s\S]*?\}\s*\}"""), "// compileKotlin removed")
                     modified = true

@@ -63,6 +63,14 @@ class AuthRepository {
     await _firebaseAuth.signOut();
   }
 
+  Future<UserCredential?> signInAnonymously() async {
+    try {
+      return await _firebaseAuth.signInAnonymously();
+    } catch (_) {
+      return null;
+    }
+  }
+
   static String mapFirebaseError(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
@@ -83,6 +91,10 @@ class AuthRepository {
         return 'محاولات كثيرة خاطئة، يرجى الانتظار قليلاً ثم المحاولة';
       case 'network-request-failed':
         return 'تعذر الاتصال بالشبكة، يرجى التأكد من اتصال الإنترنت';
+      case 'operation-not-allowed':
+        return 'تسجيل الدخول بالبريد غير مفعّل في لوحة تحكم Firebase Console (Authentication > Sign-in method)';
+      case 'channel-error':
+        return 'يرجى ملء جميع الحقول المطلوبة بشكل صحيح';
       default:
         return e.message ?? 'حدث خطأ في عملية المصادقة';
     }

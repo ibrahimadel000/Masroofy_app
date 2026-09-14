@@ -13,6 +13,8 @@ import 'package:mizaan/data/services/biometric_service.dart';
 import 'package:mizaan/data/services/demo_seeder.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
+import 'package:mizaan/features/auth/cubit/auth_state.dart';
+import 'package:mizaan/features/auth/screens/register_screen.dart';
 import 'package:mizaan/features/stats/cubit/stats_cubit.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
@@ -60,18 +62,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('جهازك لا يدعم المصادقة بالبصمة أو لم يتم إعدادها بعد'),
+              backgroundColor: Colors.redAccent,
             ),
           );
         }
         return;
       }
-      final authenticated = await bioService.authenticate();
-      if (!authenticated) return;
+      final result = await bioService.authenticateWithDetails(
+        localizedReason: 'يرجى تأكيد بصمتك لتفعيل ميزة الدخول بالبصمة',
+      );
+      if (result != BiometricAuthResult.success) {
+        if (mounted) {
+          String msg = 'تعذر تفعيل البصمة';
+          if (result == BiometricAuthResult.notEnrolled) {
+            msg = 'لم يتم تسجيل بصمة في هذا الجهاز أو المحاكي. يرجى إضافة بصمة من إعدادات النظام أولاً.';
+          } else if (result == BiometricAuthResult.lockedOut) {
+            msg = 'تم قفل محاولات البصمة مؤقتاً لكثرة المحاولات الخاطئة.';
+          } else if (result == BiometricAuthResult.notAvailable) {
+            msg = 'المصادقة بالبصمة غير مدعومة على هذا الجهاز.';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
+          );
+        }
+        return;
+      }
     }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('biometricEnabled', value);
-    setState(() => _biometricEnabled = value);
+    if (mounted) {
+      context.read<AuthCubit>().setBiometricEnabled(value);
+      setState(() => _biometricEnabled = value);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? 'تم تفعيل الدخول بالبصمة بنجاح' : 'تم تعطيل الدخول بالبصمة'),
+          backgroundColor: AppTheme.primaryColor,
+        ),
+      );
+    }
   }
 
   Future<void> _toggleDailyReminder(bool value) async {
@@ -275,26 +304,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تسجيل الخروج'),
-        content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج من التطبيق؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('تسجيل خروج', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    final authState = context.read<AuthCubit>().state;
+    final isGuest = authState is Authenticated && authState.isGuest;
 
-    if (confirmed == true && mounted) {
+    if (isGuest) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+              SizedBox(width: 8),
+              Text('تنبيه وضع الضيف', style: TextStyle(fontSize: 18)),
+            ],
+          ),
+          content: const Text(
+            'أنت تستخدم التطبيق في وضع الضيف (المحلي)، وتُحفظ سجلاتك على هذا الهاتف فقط.\n\nعند تسجيل الخروج، لن تتمكن من استرجاع بياناتك على جهاز آخر ما لم تربط حسابك ببريد إلكتروني أولاً.\n\nماذا ترغب أن تفعل؟',
+            style: TextStyle(fontSize: 13, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'cancel'),
+              child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+            ),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red.shade700,
+                side: BorderSide(color: Colors.red.shade300),
+              ),
+              onPressed: () => Navigator.pop(ctx, 'logout'),
+              child: const Text('خروج على أي حال'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.cloud_upload_rounded, size: 16),
+              label: const Text('ربط حسابي أولاً'),
+              onPressed: () => Navigator.pop(ctx, 'register'),
+            ),
+          ],
+        ),
+      );
+
+      if (choice == 'register' && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const RegisterScreen()),
+        );
+        return;
+      }
+
+      if (choice != 'logout') return;
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('تسجيل الخروج'),
+          content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج من حسابك؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('تسجيل خروج', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+    }
+
+    if (mounted) {
       await context.read<AuthCubit>().signOut();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
@@ -323,6 +411,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
       children: [
+        // Section 0: Account Status / Link Profile
+        _buildAccountCard(),
+
         // Section 1: Appearance & Theme
         _buildSectionHeader('المظهر والعرض'),
         _buildCard([
@@ -498,6 +589,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildCard(List<Widget> children) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 1,
+      child: Column(
+        children: children,
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, right: 4.0),
@@ -512,20 +613,194 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildCard(List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+  Widget _buildAccountCard() {
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, state) {
+        final isGuest = state is Authenticated && state.isGuest;
+        final user = state is Authenticated ? state.user : null;
+
+        if (isGuest || user == null) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 20.0),
+            padding: const EdgeInsets.all(18.0),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.amber.shade800,
+                  Colors.amber.shade900,
+                ],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.amber.shade800.withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.person_outline_rounded, color: Colors.white, size: 28),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Text(
+                                'حساب ضيف (وضع أوفلاين)',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              Text('🚀', style: TextStyle(fontSize: 14)),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'بياناتك ومحافظك محفوظة محلياً على هذا الهاتف',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Divider(color: Colors.white24, height: 1),
+                const SizedBox(height: 12),
+                Text(
+                  'لحماية سجلاتك من الضياع عند تغيير الهاتف أو مسح التطبيق، اربط حسابك ببريد إلكتروني الآن:',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 12, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.amber.shade900,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.cloud_upload_rounded, size: 18),
+                    label: const Text(
+                      'ربط الحساب ببريد إلكتروني ☁️',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Registered user
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20.0),
+          padding: const EdgeInsets.all(18.0),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                AppTheme.primaryColor,
+                AppTheme.secondaryColor,
+              ],
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(children: children),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person_rounded, color: Colors.white, size: 28),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.displayName ?? 'مستخدم ميزان',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.email ?? '',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.cloud_done_rounded, color: Colors.white, size: 12),
+                          SizedBox(width: 4),
+                          Text(
+                            'متصل بالسحابة (مُؤمّن)',
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

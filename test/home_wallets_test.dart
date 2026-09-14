@@ -205,5 +205,64 @@ void main() {
       final unfavorited = (walletsCubit.state as WalletsLoaded).wallets.first;
       expect(unfavorited.isFavorite, false);
     });
+
+    test('Phase 1 — Update and Delete transaction updates state and balances', () async {
+      await walletsCubit.addWallet(
+        name: 'كاش',
+        type: 'kash',
+        colorValue: 0xFF0E7C61,
+        iconCodePoint: 0xe000,
+        openingBalance: 100000.0,
+      );
+      final wallet = (walletsCubit.state as WalletsLoaded).wallets.first;
+
+      await transactionsCubit.addTransaction(
+        walletId: wallet.id,
+        type: 'expense',
+        amount: 25000.0,
+        category: 'بقالة',
+        date: DateTime.now(),
+        note: 'مشتريات قديمة',
+      );
+
+      var txList = (transactionsCubit.state as TransactionsLoaded).transactions;
+      expect(txList.length, 1);
+      final tx = txList.first;
+      expect(tx.amount, 25000.0);
+      expect(tx.note, 'مشتريات قديمة');
+
+      // 1. Update transaction
+      final updatedTx = tx.copyWith(
+        amount: 30000.0,
+        note: 'مشتريات معدلة',
+      );
+      await transactionsCubit.updateTransaction(updatedTx);
+
+      txList = (transactionsCubit.state as TransactionsLoaded).transactions;
+      expect(txList.length, 1);
+      expect(txList.first.amount, 30000.0);
+      expect(txList.first.note, 'مشتريات معدلة');
+
+      // Verify balance reflects edit: 100,000 - 30,000 = 70,000
+      var liveBalance = BalanceCalculator.calculateWalletBalance(
+        openingBalance: wallet.openingBalance,
+        transactions: txList,
+      );
+      expect(liveBalance, 70000.0);
+
+      // 2. Delete transaction
+      await transactionsCubit.deleteTransaction(tx.id);
+
+      txList = (transactionsCubit.state as TransactionsLoaded).transactions;
+      expect(txList.isEmpty, true);
+
+      // Verify balance restored: 100,000
+      liveBalance = BalanceCalculator.calculateWalletBalance(
+        openingBalance: wallet.openingBalance,
+        transactions: txList,
+      );
+      expect(liveBalance, 100000.0);
+    });
   });
 }
+

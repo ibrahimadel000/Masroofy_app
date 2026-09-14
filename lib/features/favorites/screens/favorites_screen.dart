@@ -9,6 +9,7 @@ import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/transactions/screens/add_transaction_screen.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
 import 'package:mizaan/features/wallets/screens/wallet_details_screen.dart';
+import 'package:mizaan/features/transactions/widgets/transaction_detail_sheet.dart';
 
 class FavoritesScreen extends StatelessWidget {
   final bool isEmbedded;
@@ -178,7 +179,7 @@ class FavoritesScreen extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  AppConstants.formatCurrency(liveBalance),
+                                  AppConstants.formatCurrency(liveBalance, wallet.currencyCode),
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
@@ -242,6 +243,57 @@ class FavoritesScreen extends StatelessWidget {
                                 ),
                               ],
                             ),
+
+                            // Enriched: Latest transactions in this favorite wallet
+                            if (walletTxs.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              const Divider(height: 1),
+                              const SizedBox(height: 8),
+                              ...walletTxs.take(2).map((tx) {
+                                final isIncome = tx.type == 'income';
+                                final isAdj = tx.type == 'adjustment';
+                                final clr = isIncome
+                                    ? AppTheme.primaryColor
+                                    : isAdj
+                                        ? Colors.blue.shade700
+                                        : Colors.red.shade700;
+                                final pfx = isIncome ? '+' : isAdj ? (tx.amount >= 0 ? '+' : '') : '-';
+
+                                return InkWell(
+                                  onTap: () => TransactionDetailSheet.show(context, tx),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          AppConstants.getCategoryIcon(tx.category),
+                                          size: 16,
+                                          color: clr,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            '${tx.category} • ${AppConstants.formatDate(tx.date)}',
+                                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        Text(
+                                          '$pfx${AppConstants.formatCurrency(tx.amount.abs())}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: clr,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
                           ],
                         ),
                       ),
