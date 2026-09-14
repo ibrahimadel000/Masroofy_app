@@ -19,6 +19,10 @@ import 'package:mizaan/features/wallets/screens/add_wallet_screen.dart';
 import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/features/wallets/screens/wallet_details_screen.dart';
+import 'package:mizaan/data/repositories/transaction_repository.dart';
+import 'package:mizaan/data/repositories/wallet_repository.dart';
+import 'package:mizaan/data/services/sms_service.dart';
+import 'package:mizaan/features/stats/cubit/stats_cubit.dart';
 import 'package:mizaan/features/transactions/screens/transactions_history_screen.dart';
 import 'package:mizaan/features/transactions/widgets/transaction_detail_sheet.dart';
 
@@ -29,20 +33,60 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentTabIndex = 0;
   bool _isOffline = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (Platform.isAndroid) {
+        _initSmsListenerAndPermissions();
         _triggerAutoImportIfEnabled();
       }
       _checkNotificationPermissionOnce();
       _checkConnectivity();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && Platform.isAndroid) {
+      _triggerAutoImportIfEnabled();
+    }
+  }
+
+  Future<void> _initSmsListenerAndPermissions() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final notif = NotificationService();
+      await notif.init();
+
+      final smsService = const SmsService();
+      final txRepo = TransactionRepository();
+      final walletRepo = WalletRepository();
+
+      await smsService.startIncomingSmsListener(
+        transactionRepository: txRepo,
+        walletRepository: walletRepo,
+        notificationService: notif,
+        onTransactionReceived: (TransactionModel tx) {
+          if (mounted) {
+            context.read<TransactionsCubit>().loadTransactions();
+            context.read<WalletsCubit>().loadWallets();
+            context.read<StatsCubit>().loadStats();
+          }
+        },
+      );
+    } catch (_) {}
   }
 
   Future<void> _checkConnectivity() async {
@@ -96,6 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (importedCount > 0 && mounted) {
       context.read<TransactionsCubit>().loadTransactions();
       context.read<WalletsCubit>().loadWallets();
+      context.read<StatsCubit>().loadStats();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppTheme.primaryColor,
@@ -106,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const Icon(Icons.mark_email_read_rounded, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('تم استيراد $importedCount حركات تلقائياً من رسائل المحافظ 📩'),
+                child: Text('تم استيراد $importedCount حركات تلقائياً وتحديث المحفظة 📩'),
               ),
             ],
           ),
@@ -842,7 +887,7 @@ class _HomeMainView extends StatelessWidget {
                   ],
                 ),
                 subtitle: Text(
-                  '${wallet?.name ?? "محفظة"} • ${AppConstants.formatDate(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
+                  '${wallet?.name ?? "محفظة"} • ${AppConstants.formatDate(tx.date)}  ${AppConstants.formatTime(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
                   style: const TextStyle(fontSize: 12),
                 ),
                 trailing: Text(

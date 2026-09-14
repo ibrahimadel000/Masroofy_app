@@ -93,7 +93,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       locale: const Locale('ar'),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      if (!mounted) return;
+      final pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_selectedDate),
+      );
+      final finalTime = pickedTime ?? TimeOfDay.fromDateTime(_selectedDate);
+      setState(() {
+        _selectedDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          finalTime.hour,
+          finalTime.minute,
+        );
+      });
     }
   }
 
@@ -565,8 +579,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             const Icon(Icons.calendar_today_rounded, size: 20, color: Colors.grey),
                             const SizedBox(width: 12),
                             Text(
-                              'التاريخ: ${AppConstants.formatDate(_selectedDate)}',
-                              style: const TextStyle(fontSize: 15),
+                              'التاريخ والوقت: ${AppConstants.formatDate(_selectedDate)}  ${AppConstants.formatTime(_selectedDate)}',
+                              style: const TextStyle(fontSize: 14),
                             ),
                             const Spacer(),
                             const Icon(Icons.arrow_drop_down, color: Colors.grey),

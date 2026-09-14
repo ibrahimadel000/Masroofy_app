@@ -17,6 +17,10 @@ class NotificationService {
   static const String remindersChannelName = 'تذكيرات ميزان';
   static const String remindersChannelDesc = 'تذكير يومي لتسجيل المصروفات';
 
+  static const String transactionsChannelId = 'mizaan_transactions';
+  static const String transactionsChannelName = 'حركات المحافظ والرسائل';
+  static const String transactionsChannelDesc = 'إشعارات فورية بالعمليات المالية والمشتريات والإيداعات المستلمة';
+
   NotificationService({FlutterLocalNotificationsPlugin? plugin})
       : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
@@ -57,6 +61,15 @@ class NotificationService {
               remindersChannelName,
               description: remindersChannelDesc,
               importance: Importance.defaultImportance,
+            ),
+          );
+
+          await androidImpl.createNotificationChannel(
+            const AndroidNotificationChannel(
+              transactionsChannelId,
+              transactionsChannelName,
+              description: transactionsChannelDesc,
+              importance: Importance.max,
             ),
           );
         }
@@ -162,6 +175,45 @@ class NotificationService {
   Future<void> cancelDailyReminder() async {
     try {
       await _plugin.cancel(dailyReminderNotificationId);
+    } catch (_) {}
+  }
+
+  /// Show instant notification for transactions (purchase, deposit, transfer, etc.)
+  Future<void> showTransactionAlert({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    try {
+      final androidDetails = AndroidNotificationDetails(
+        transactionsChannelId,
+        transactionsChannelName,
+        channelDescription: transactionsChannelDesc,
+        importance: Importance.max,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        styleInformation: BigTextStyleInformation(body),
+      );
+
+      const darwinDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      final details = NotificationDetails(
+        android: androidDetails,
+        iOS: darwinDetails,
+      );
+
+      final notifId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      await _plugin.show(
+        notifId,
+        title,
+        body,
+        details,
+        payload: payload,
+      );
     } catch (_) {}
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/constants/sms_senders.dart';
 
 void main() {
@@ -57,6 +58,60 @@ void main() {
       expect(parsed.amount, 1100.0);
       expect(parsed.balance, 1445.30);
       expect(parsed.category, 'تحويل');
+    });
+
+    test('Kuraimi Bank real SMS 4 — Merchant Purchase (Expense 100.00)', () {
+      const sender = 'KuraimiIMB';
+      const body = 'تم خصم مبلغ YER 100.00 مقابل مشترياتك من 1588993\nالمرجع: 54177667';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 100.0);
+      expect(parsed.balance, isNull);
+      expect(parsed.category, 'بقالة');
+    });
+
+    test('Kuraimi Bank real SMS 5 — Multiline Deposit with مبلغ (Income 100.0)', () {
+      const sender = 'KuraimiIMB';
+      const body = 'أودع/ابراهيم عادل عبدالواحد الشرجبي\nلحسابك مبلغ 100 رصيدك YER 4045.3';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 100.0);
+      expect(parsed.balance, 4045.3);
+      expect(parsed.category, 'تحويل');
+    });
+
+    test('Kuraimi Bank real SMS 6 — Mobile Bill payment (Expense 200.00)', () {
+      const sender = 'KuraimiIMB';
+      const body = 'تم سداد 200.00 جوال 772004664 رصيدك YER 51,045.30';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 200.0);
+      expect(parsed.balance, 51045.30);
+      expect(parsed.category, 'فواتير');
     });
 
     test('Jaib Wallet real SMS 1 — Transfer In (Income 500)', () {
@@ -135,6 +190,35 @@ void main() {
       );
 
       expect(parsed, isNull);
+    });
+
+    test('SMS Arrival timestamp preservation and formatting in Arabic', () {
+      final arrivalTime = DateTime(2026, 9, 15, 20, 45); // 08:45 PM
+      const sender = 'KuraimiMB';
+      const body = 'أودع/عادل عبدالواحد لحسابك50,000.00\n51,245.30YERرصيدك';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: arrivalTime,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.date, arrivalTime);
+      expect(parsed.date.hour, 20);
+      expect(parsed.date.minute, 45);
+
+      final formattedTime = AppConstants.formatTime(arrivalTime);
+      expect(formattedTime.contains('08:45') || formattedTime.contains('8:45') || formattedTime.contains('٢٠:٤٥') || formattedTime.contains('٠٨:٤٥'), isTrue);
+
+      final formattedDateTime = AppConstants.formatDateTime(arrivalTime);
+      expect(formattedDateTime.contains('2026') || formattedDateTime.contains('٢٠٢٦'), isTrue);
+    });
+
+    test('formatTime morning AM formatting', () {
+      final morningTime = DateTime(2026, 9, 15, 9, 15); // 09:15 AM
+      final formattedTime = AppConstants.formatTime(morningTime);
+      expect(formattedTime.contains('09:15') || formattedTime.contains('9:15') || formattedTime.contains('٠٩:١٥'), isTrue);
     });
   });
 }

@@ -305,7 +305,7 @@ class TransactionDetailSheet extends StatelessWidget {
                       ),
                       title: const Text('التاريخ والوقت', style: TextStyle(fontSize: 13, color: Colors.grey)),
                       subtitle: Text(
-                        AppConstants.formatDate(transaction.date),
+                        AppConstants.formatDateTime(transaction.date),
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -390,6 +390,21 @@ class TransactionDetailSheet extends StatelessWidget {
                           height: 1.5,
                           fontFamily: 'monospace',
                         ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Icon(Icons.schedule_rounded, size: 14, color: Colors.blue.shade700),
+                          const SizedBox(width: 5),
+                          Text(
+                            'وقت استلام الرسالة: ${AppConstants.formatTime(transaction.date)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade800,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

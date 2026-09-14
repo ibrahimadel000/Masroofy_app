@@ -134,4 +134,26 @@ class AppConstants {
       return arabicWeekdaysShort[(date.weekday - 1) % 7];
     }
   }
+
+  // Time Formatter (12-hour format in Arabic: 08:30 م / 10:15 ص)
+  static String formatTime(DateTime date) {
+    try {
+      final formatter = DateFormat('hh:mm a', 'ar');
+      return formatter.format(date);
+    } catch (_) {
+      final int hour = date.hour;
+      final int minute = date.minute;
+      final isPm = hour >= 12;
+      final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      final h = displayHour.toString().padLeft(2, '0');
+      final m = minute.toString().padLeft(2, '0');
+      final period = isPm ? 'م' : 'ص';
+      return '$h:$m $period';
+    }
+  }
+
+  // Combined Date and Time Formatter
+  static String formatDateTime(DateTime date) {
+    return '${formatDate(date)}  •  ${formatTime(date)}';
+  }
 }

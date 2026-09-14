@@ -34,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _biometricEnabled = false;
   bool _dailyReminderEnabled = true;
   bool _smsAutoImportEnabled = true;
+  bool _smsNotificationsEnabled = true;
   double _lowBalanceThreshold = 10000.0;
   bool _isLoading = false;
 
@@ -60,6 +61,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           true;
       _smsAutoImportEnabled = prefs.getBool(_userKey('smsAutoImportEnabled')) ??
           prefs.getBool('smsAutoImportEnabled') ??
+          true;
+      _smsNotificationsEnabled = prefs.getBool(_userKey('smsNotificationsEnabled')) ??
+          prefs.getBool('smsNotificationsEnabled') ??
           true;
       _lowBalanceThreshold = prefs.getDouble(_userKey('lowBalanceThreshold')) ??
           prefs.getDouble('lowBalanceThreshold') ??
@@ -140,6 +144,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool(_userKey('smsAutoImportEnabled'), value);
     await prefs.setBool('smsAutoImportEnabled', value);
     setState(() => _smsAutoImportEnabled = value);
+  }
+
+  Future<void> _toggleSmsNotifications(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_userKey('smsNotificationsEnabled'), value);
+    await prefs.setBool('smsNotificationsEnabled', value);
+    setState(() => _smsNotificationsEnabled = value);
+    if (value) {
+      final notif = NotificationService();
+      await notif.init();
+      final hasPerm = await notif.hasPermission();
+      if (!hasPerm) {
+        await notif.requestPermission();
+      }
+    }
   }
 
   Future<void> _editThresholdDialog() async {
@@ -531,11 +550,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               secondary: const Icon(Icons.mark_email_read_rounded, color: AppTheme.primaryColor),
               title: const Text('الاستيراد التلقائي للرسائل'),
               subtitle: const Text(
-                'استيراد حركات المحافظ في الخلفية فور فتح التطبيق',
+                'استيراد حركات المحافظ في الخلفية فور وصول الرسالة أو فتح التطبيق',
                 style: TextStyle(fontSize: 12),
               ),
               value: _smsAutoImportEnabled,
               onChanged: _toggleSmsAutoImport,
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              activeThumbColor: AppTheme.primaryColor,
+              secondary: const Icon(Icons.notifications_active_rounded, color: AppTheme.primaryColor),
+              title: const Text('إشعارات الحركات (SMS)'),
+              subtitle: const Text(
+                'تنبيه فوري عند وصول رسائل عمليات الإيداع أو المشتريات والخصم',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _smsNotificationsEnabled,
+              onChanged: _toggleSmsNotifications,
             ),
             const Divider(height: 1),
             ListTile(

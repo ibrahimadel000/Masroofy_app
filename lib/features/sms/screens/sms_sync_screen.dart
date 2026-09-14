@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
+import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/features/sms/cubit/sms_cubit.dart';
@@ -268,6 +269,34 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
         ),
         const Divider(height: 1),
 
+        // Banner if user has no wallets added yet
+        if (wallets.isEmpty)
+          Container(
+            margin: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.amber.shade300),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'يجب إضافة محفظة واحدة على الأقل لربط الحركات بها.',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pushNamed(context, AppRoutes.addWallet),
+                  child: const Text('إضافة محفظة', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+
         // List of candidate transactions
         Expanded(
           child: ListView.builder(
@@ -400,7 +429,7 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                         child: Row(
                           children: [
                             Text(
-                              '${AppConstants.formatDate(item.data.date)}  •  ${item.data.rawSender}',
+                              '${AppConstants.formatDate(item.data.date)}  ${AppConstants.formatTime(item.data.date)}  •  ${item.data.rawSender}',
                               style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                             ),
                             const Spacer(),
@@ -441,10 +470,12 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                 ),
                 icon: const Icon(Icons.download_done_rounded),
                 label: Text(
-                  'استيراد الحركات المحددة (${state.selectedCount}) 📥',
+                  wallets.isEmpty
+                      ? 'يرجى إضافة محفظة أولاً'
+                      : 'استيراد الحركات المحددة (${state.selectedCount}) 📥',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                onPressed: state.selectedCount == 0
+                onPressed: (state.selectedCount == 0 || wallets.isEmpty)
                     ? null
                     : () => context.read<SmsCubit>().importSelected(),
               ),

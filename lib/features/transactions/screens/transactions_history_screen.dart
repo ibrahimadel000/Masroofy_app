@@ -480,7 +480,7 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
                     ],
                   ),
                   subtitle: Text(
-                    '${wallet?.name ?? "محفظة"} • ${AppConstants.formatDate(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
+                    '${wallet?.name ?? "محفظة"} • ${AppConstants.formatTime(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
                     style: const TextStyle(fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

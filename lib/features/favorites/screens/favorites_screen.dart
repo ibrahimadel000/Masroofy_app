@@ -275,12 +275,12 @@ class FavoritesScreen extends StatelessWidget {
                                         ),
                                         const SizedBox(width: 6),
                                         Expanded(
-                                          child: Text(
-                                            '${tx.category} • ${AppConstants.formatDate(tx.date)}',
-                                            style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                            child: Text(
+                                              '${tx.category} • ${AppConstants.formatDate(tx.date)}  ${AppConstants.formatTime(tx.date)}',
+                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                         ),
                                         Text(
                                           '$pfx${AppConstants.formatCurrency(tx.amount.abs())}',

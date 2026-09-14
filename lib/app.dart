@@ -9,6 +9,7 @@ import 'package:mizaan/data/repositories/transaction_repository.dart';
 import 'package:mizaan/data/repositories/wallet_repository.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
 import 'package:mizaan/data/services/database_service.dart';
+import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/data/services/sms_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
@@ -59,6 +60,7 @@ class MizaanApp extends StatelessWidget {
           create: (_) => TransactionsCubit(
             repository: transactionRepository ?? TransactionRepository(),
             walletRepository: walletRepository ?? WalletRepository(),
+            notificationService: NotificationService(),
             prefs: prefs,
           ),
         ),
@@ -66,6 +68,7 @@ class MizaanApp extends StatelessWidget {
           create: (_) => SmsCubit(
             smsService: const SmsService(),
             transactionRepository: transactionRepository ?? TransactionRepository(),
+            notificationService: NotificationService(),
           ),
         ),
         BlocProvider<StatsCubit>(
@@ -103,6 +106,7 @@ class MizaanApp extends StatelessWidget {
             context.read<WalletsCubit>().reset();
             context.read<TransactionsCubit>().reset();
             context.read<StatsCubit>().reset();
+            context.read<SmsCubit>().reset();
           }
         },
         child: BlocBuilder<ThemeCubit, ThemeMode>(

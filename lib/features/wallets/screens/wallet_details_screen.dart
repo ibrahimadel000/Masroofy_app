@@ -392,10 +392,10 @@ class WalletDetailsScreen extends StatelessWidget {
                                         ],
                                       ],
                                     ),
-                                    subtitle: Text(
-                                      '${AppConstants.formatDate(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
+                                     subtitle: Text(
+                                       '${AppConstants.formatDate(tx.date)}  ${AppConstants.formatTime(tx.date)}${tx.note != null && tx.note!.isNotEmpty ? " • ${tx.note}" : ""}',
+                                       style: const TextStyle(fontSize: 12),
+                                     ),
                                     trailing: Text(
                                       '$prefix${AppConstants.formatCurrency(tx.amount.abs())}',
                                       style: TextStyle(
