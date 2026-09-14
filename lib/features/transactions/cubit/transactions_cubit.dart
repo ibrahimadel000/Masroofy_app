@@ -4,6 +4,7 @@ import 'package:mizaan/core/utils/balance_calculator.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/repositories/transaction_repository.dart';
 import 'package:mizaan/data/repositories/wallet_repository.dart';
+import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -62,6 +63,10 @@ class TransactionsCubit extends Cubit<TransactionsState> {
     }
   }
 
+  void reset() {
+    emit(const TransactionsLoaded([]));
+  }
+
   Future<void> addTransaction({
     required String walletId,
     required String type,
@@ -106,7 +111,10 @@ class TransactionsCubit extends Cubit<TransactionsState> {
           transactions: txs,
         );
         final sp = prefs ?? await SharedPreferences.getInstance();
-        final threshold = sp.getDouble('lowBalanceThreshold') ?? 10000.0;
+        final uid = DatabaseService.currentUserId ?? 'guest';
+        final threshold = sp.getDouble('${uid}_lowBalanceThreshold') ??
+            sp.getDouble('lowBalanceThreshold') ??
+            10000.0;
         if (currentBal < threshold) {
           await notif.showLowBalanceAlert(
             walletName: wallet.name,

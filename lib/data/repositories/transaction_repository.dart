@@ -22,10 +22,30 @@ class TransactionRepository {
 
   Box<TransactionModel> get _box => _customBox ?? DatabaseService.transactionsBox;
   Box<bool> get _keysBox => _customKeysBox ?? DatabaseService.smsKeysBox;
-  FirebaseFirestore get _firestore => _customFirestore ?? FirebaseFirestore.instance;
-  FirebaseAuth get _auth => _customAuth ?? FirebaseAuth.instance;
 
-  String? get _currentUserId => _auth.currentUser?.uid;
+  FirebaseFirestore? get _firestore {
+    try {
+      return _customFirestore ?? FirebaseFirestore.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  FirebaseAuth? get _auth {
+    try {
+      return _customAuth ?? FirebaseAuth.instance;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? get _currentUserId {
+    try {
+      return _auth?.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
 
   List<TransactionModel> getTransactions() {
     final list = _box.values.toList();
@@ -61,9 +81,10 @@ class TransactionRepository {
 
     // 2. Attempt sync to Firestore if online/logged in
     final uid = _currentUserId;
-    if (uid != null) {
+    final fs = _firestore;
+    if (uid != null && fs != null) {
       try {
-        await _firestore
+        await fs
             .collection('users')
             .doc(uid)
             .collection('transactions')
@@ -81,9 +102,10 @@ class TransactionRepository {
 
     // 2. Delete from Firestore if logged in
     final uid = _currentUserId;
-    if (uid != null) {
+    final fs = _firestore;
+    if (uid != null && fs != null) {
       try {
-        await _firestore
+        await fs
             .collection('users')
             .doc(uid)
             .collection('transactions')
@@ -97,10 +119,11 @@ class TransactionRepository {
 
   Future<void> syncFromFirestore() async {
     final uid = _currentUserId;
-    if (uid == null) return;
+    final fs = _firestore;
+    if (uid == null || fs == null) return;
 
     try {
-      final snapshot = await _firestore
+      final snapshot = await fs
           .collection('users')
           .doc(uid)
           .collection('transactions')

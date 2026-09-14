@@ -51,6 +51,10 @@ class WalletsCubit extends Cubit<WalletsState> {
     }
   }
 
+  void reset() {
+    emit(const WalletsLoaded([]));
+  }
+
   Future<void> addWallet({
     required String name,
     required String type,

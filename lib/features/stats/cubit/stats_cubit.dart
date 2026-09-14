@@ -17,6 +17,10 @@ class StatsCubit extends Cubit<StatsState> {
     loadStats();
   }
 
+  void reset() {
+    emit(StatsInitial());
+  }
+
   DateTime _resolveReferenceDate(DateTime target) {
     final realNow = DateTime.now();
     if (target.year == realNow.year && target.month == realNow.month) {

@@ -8,8 +8,10 @@ import 'package:mizaan/data/repositories/auth_repository.dart';
 import 'package:mizaan/data/repositories/transaction_repository.dart';
 import 'package:mizaan/data/repositories/wallet_repository.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
+import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/data/services/sms_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
+import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/sms/cubit/sms_cubit.dart';
 import 'package:mizaan/features/splash/screens/splash_screen.dart';
 import 'package:mizaan/features/stats/cubit/stats_cubit.dart';
@@ -73,24 +75,55 @@ class MizaanApp extends StatelessWidget {
           ),
         ),
       ],
-      child: BlocBuilder<ThemeCubit, ThemeMode>(
-        builder: (context, themeMode) {
-          return MaterialApp(
-            title: 'ميزان',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: themeMode,
-            builder: (context, child) {
-              return Directionality(
-                textDirection: TextDirection.rtl,
-                child: child ?? const SizedBox.shrink(),
-              );
-            },
-            onGenerateRoute: (settings) => AppRoutes.onGenerateRoute(settings, prefs),
-            home: homeOverride ?? SplashScreen(prefs: prefs),
-          );
+      child: BlocListener<AuthCubit, AuthState>(
+        listener: (context, authState) async {
+          if (authState is Authenticated) {
+            final uid = authState.isGuest ? 'guest' : authState.user?.uid;
+            await DatabaseService.switchUser(uid);
+            if (context.mounted) {
+              context.read<WalletsCubit>().loadWallets();
+              context.read<TransactionsCubit>().loadTransactions();
+              context.read<StatsCubit>().loadStats();
+
+              if (!authState.isGuest && authState.user != null) {
+                final wRepo = walletRepository ?? WalletRepository();
+                final txRepo = transactionRepository ?? TransactionRepository();
+                wRepo.syncFromFirestore().then((_) {
+                  if (context.mounted) context.read<WalletsCubit>().loadWallets();
+                });
+                txRepo.syncFromFirestore().then((_) {
+                  if (context.mounted) {
+                    context.read<TransactionsCubit>().loadTransactions();
+                    context.read<StatsCubit>().loadStats();
+                  }
+                });
+              }
+            }
+          } else if (authState is Unauthenticated) {
+            context.read<WalletsCubit>().reset();
+            context.read<TransactionsCubit>().reset();
+            context.read<StatsCubit>().reset();
+          }
         },
+        child: BlocBuilder<ThemeCubit, ThemeMode>(
+          builder: (context, themeMode) {
+            return MaterialApp(
+              title: 'ميزان',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeMode,
+              builder: (context, child) {
+                return Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
+              onGenerateRoute: (settings) => AppRoutes.onGenerateRoute(settings, prefs),
+              home: homeOverride ?? SplashScreen(prefs: prefs),
+            );
+          },
+        ),
       ),
     );
   }

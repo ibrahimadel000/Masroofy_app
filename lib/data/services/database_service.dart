@@ -3,12 +3,28 @@ import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 
 class DatabaseService {
-  static const String boxWallets = 'walletsBox';
-  static const String boxTransactions = 'transactionsBox';
-  static const String boxSmsKeys = 'smsKeysBox';
+  static const String legacyBoxWallets = 'walletsBox';
+  static const String legacyBoxTransactions = 'transactionsBox';
+  static const String legacyBoxSmsKeys = 'smsKeysBox';
 
-  static Future<void> init() async {
+  static Box<Wallet>? _activeWalletsBox;
+  static Box<TransactionModel>? _activeTransactionsBox;
+  static Box<bool>? _activeSmsKeysBox;
+  static String? _currentUserId;
+
+  static bool _isHiveInitialized = false;
+
+  static bool get isInitialized => _isHiveInitialized;
+
+  static void markInitializedForTesting([bool initialized = true]) {
+    _isHiveInitialized = initialized;
+  }
+
+  static String? get currentUserId => _currentUserId;
+
+  static Future<void> init({String? initialUserId}) async {
     await Hive.initFlutter();
+    _isHiveInitialized = true;
 
     // Register Hive Adapters if not already registered
     if (!Hive.isAdapterRegistered(0)) {
@@ -18,13 +34,140 @@ class DatabaseService {
       Hive.registerAdapter(TransactionModelAdapter());
     }
 
-    // Open required boxes
-    await Hive.openBox<Wallet>(boxWallets);
-    await Hive.openBox<TransactionModel>(boxTransactions);
-    await Hive.openBox<bool>(boxSmsKeys);
+    await switchUser(initialUserId ?? 'guest');
   }
 
-  static Box<Wallet> get walletsBox => Hive.box<Wallet>(boxWallets);
-  static Box<TransactionModel> get transactionsBox => Hive.box<TransactionModel>(boxTransactions);
-  static Box<bool> get smsKeysBox => Hive.box<bool>(boxSmsKeys);
+  static String sanitizeUserId(String? userId) {
+    if (userId == null || userId.trim().isEmpty) return 'guest';
+    return userId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+  }
+
+  static Future<void> switchUser(String? userId) async {
+    final sanitizedId = sanitizeUserId(userId);
+    _currentUserId = sanitizedId;
+
+    if (!_isHiveInitialized) {
+      // Hive has not been initialized (e.g. lightweight widget unit tests).
+      return;
+    }
+
+    if (_activeWalletsBox != null &&
+        _activeWalletsBox!.isOpen &&
+        _activeTransactionsBox != null &&
+        _activeTransactionsBox!.isOpen &&
+        _activeSmsKeysBox != null &&
+        _activeSmsKeysBox!.isOpen &&
+        _activeWalletsBox!.name == 'wallets_$sanitizedId') {
+      return;
+    }
+
+    final walletsBoxName = 'wallets_$sanitizedId';
+    final transactionsBoxName = 'transactions_$sanitizedId';
+    final smsKeysBoxName = 'sms_keys_$sanitizedId';
+
+    try {
+      _activeWalletsBox = await Hive.openBox<Wallet>(walletsBoxName);
+      _activeTransactionsBox = await Hive.openBox<TransactionModel>(transactionsBoxName);
+      _activeSmsKeysBox = await Hive.openBox<bool>(smsKeysBoxName);
+
+      // One-time legacy migration if the active user's box is empty
+      await _migrateLegacyIfNeeded(_activeWalletsBox!, _activeTransactionsBox!, _activeSmsKeysBox!);
+    } catch (_) {
+      // In test environments where Hive storage path is not initialized, don't throw
+    }
+  }
+
+  static Future<void> _migrateLegacyIfNeeded(
+    Box<Wallet> walletsBox,
+    Box<TransactionModel> txBox,
+    Box<bool> smsBox,
+  ) async {
+    try {
+      if (walletsBox.isEmpty && await Hive.boxExists(legacyBoxWallets)) {
+        final legacyWallets = await Hive.openBox<Wallet>(legacyBoxWallets);
+        if (legacyWallets.isNotEmpty) {
+          for (final key in legacyWallets.keys) {
+            final val = legacyWallets.get(key);
+            if (val != null) {
+              await walletsBox.put(key, val);
+            }
+          }
+          await legacyWallets.clear();
+        }
+      }
+
+      if (txBox.isEmpty && await Hive.boxExists(legacyBoxTransactions)) {
+        final legacyTx = await Hive.openBox<TransactionModel>(legacyBoxTransactions);
+        if (legacyTx.isNotEmpty) {
+          for (final key in legacyTx.keys) {
+            final val = legacyTx.get(key);
+            if (val != null) {
+              await txBox.put(key, val);
+            }
+          }
+          await legacyTx.clear();
+        }
+      }
+
+      if (smsBox.isEmpty && await Hive.boxExists(legacyBoxSmsKeys)) {
+        final legacySms = await Hive.openBox<bool>(legacyBoxSmsKeys);
+        if (legacySms.isNotEmpty) {
+          for (final key in legacySms.keys) {
+            final val = legacySms.get(key);
+            if (val != null) {
+              await smsBox.put(key, val);
+            }
+          }
+          await legacySms.clear();
+        }
+      }
+    } catch (_) {
+      // Ignore migration errors gracefully
+    }
+  }
+
+  static Box<Wallet> get walletsBox {
+    if (_activeWalletsBox != null && _activeWalletsBox!.isOpen) {
+      return _activeWalletsBox!;
+    }
+    final boxName = 'wallets_${_currentUserId ?? 'guest'}';
+    if (Hive.isBoxOpen(boxName)) {
+      _activeWalletsBox = Hive.box<Wallet>(boxName);
+      return _activeWalletsBox!;
+    }
+    if (Hive.isBoxOpen(legacyBoxWallets)) {
+      return Hive.box<Wallet>(legacyBoxWallets);
+    }
+    throw StateError('Wallets box is not open. Call DatabaseService.switchUser() first.');
+  }
+
+  static Box<TransactionModel> get transactionsBox {
+    if (_activeTransactionsBox != null && _activeTransactionsBox!.isOpen) {
+      return _activeTransactionsBox!;
+    }
+    final boxName = 'transactions_${_currentUserId ?? 'guest'}';
+    if (Hive.isBoxOpen(boxName)) {
+      _activeTransactionsBox = Hive.box<TransactionModel>(boxName);
+      return _activeTransactionsBox!;
+    }
+    if (Hive.isBoxOpen(legacyBoxTransactions)) {
+      return Hive.box<TransactionModel>(legacyBoxTransactions);
+    }
+    throw StateError('Transactions box is not open. Call DatabaseService.switchUser() first.');
+  }
+
+  static Box<bool> get smsKeysBox {
+    if (_activeSmsKeysBox != null && _activeSmsKeysBox!.isOpen) {
+      return _activeSmsKeysBox!;
+    }
+    final boxName = 'sms_keys_${_currentUserId ?? 'guest'}';
+    if (Hive.isBoxOpen(boxName)) {
+      _activeSmsKeysBox = Hive.box<bool>(boxName);
+      return _activeSmsKeysBox!;
+    }
+    if (Hive.isBoxOpen(legacyBoxSmsKeys)) {
+      return Hive.box<bool>(legacyBoxSmsKeys);
+    }
+    throw StateError('Sms keys box is not open. Call DatabaseService.switchUser() first.');
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/data/repositories/auth_repository.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
+import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
 
 class AuthCubit extends Cubit<AuthState> {
@@ -18,28 +19,44 @@ class AuthCubit extends Cubit<AuthState> {
     required this.prefs,
   }) : super(AuthInitial());
 
-  bool get isBiometricEnabled => prefs.getBool(keyBiometricEnabled) ?? false;
+  String get _biometricKey {
+    final uid = authRepository.currentUser?.uid;
+    if (uid != null) {
+      return '${uid}_$keyBiometricEnabled';
+    }
+    if (isGuestLoggedIn) {
+      return 'guest_$keyBiometricEnabled';
+    }
+    return keyBiometricEnabled;
+  }
+
+  bool get isBiometricEnabled =>
+      prefs.getBool(_biometricKey) ?? prefs.getBool(keyBiometricEnabled) ?? false;
   bool get isGuestLoggedIn => prefs.getBool(keyGuestLoggedIn) ?? false;
 
   Future<void> setBiometricEnabled(bool enabled) async {
+    await prefs.setBool(_biometricKey, enabled);
     await prefs.setBool(keyBiometricEnabled, enabled);
   }
 
   Future<void> checkAuthStatus() async {
     final user = authRepository.currentUser;
     if (user != null) {
+      await DatabaseService.switchUser(user.uid);
       if (isBiometricEnabled) {
         emit(BiometricRequired(user));
       } else {
         emit(Authenticated(user));
       }
     } else if (isGuestLoggedIn) {
+      await DatabaseService.switchUser('guest');
       if (isBiometricEnabled) {
         emit(const BiometricRequired(null));
       } else {
         emit(const Authenticated(null, isGuest: true));
       }
     } else {
+      await DatabaseService.switchUser('guest');
       emit(Unauthenticated());
     }
   }
@@ -55,6 +72,9 @@ class AuthCubit extends Cubit<AuthState> {
         password: password,
       );
       await prefs.setBool(keyGuestLoggedIn, false);
+      if (credential.user != null) {
+        await DatabaseService.switchUser(credential.user!.uid);
+      }
       emit(Authenticated(credential.user));
     } catch (e) {
       emit(AuthError(e.toString()));
@@ -74,6 +94,9 @@ class AuthCubit extends Cubit<AuthState> {
         password: password,
       );
       await prefs.setBool(keyGuestLoggedIn, false);
+      if (credential.user != null) {
+        await DatabaseService.switchUser(credential.user!.uid);
+      }
       emit(Authenticated(credential.user, isFirstLogin: true));
     } catch (e) {
       emit(AuthError(e.toString()));
@@ -83,6 +106,7 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> continueAsGuest() async {
     emit(Authenticating());
     await prefs.setBool(keyGuestLoggedIn, true);
+    await DatabaseService.switchUser('guest');
     emit(const Authenticated(null, isGuest: true));
   }
 
@@ -115,6 +139,7 @@ class AuthCubit extends Cubit<AuthState> {
     emit(Authenticating());
     await prefs.setBool(keyGuestLoggedIn, false);
     await authRepository.signOut();
+    await DatabaseService.switchUser('guest');
     emit(Unauthenticated());
   }
 }

@@ -63,9 +63,11 @@ class TransactionDetailSheet extends StatelessWidget {
                     children: [
                       const Icon(Icons.check_circle_rounded, color: Colors.white),
                       const SizedBox(width: 10),
-                      Text(
-                        'تم حذف الحركة بنجاح (${AppConstants.formatCurrency(transaction.amount.abs())})',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      Expanded(
+                        child: Text(
+                          'تم حذف الحركة بنجاح (${AppConstants.formatCurrency(transaction.amount.abs())})',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ],
                   ),

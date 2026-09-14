@@ -135,6 +135,8 @@ class FavoritesScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     wallet.name,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 18,

@@ -43,13 +43,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadPreferences();
   }
 
+  String _userKey(String base) {
+    final authState = context.read<AuthCubit>().state;
+    final uid = (authState is Authenticated && !authState.isGuest) ? authState.user?.uid : 'guest';
+    return '${uid ?? 'guest'}_$base';
+  }
+
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _biometricEnabled = prefs.getBool('biometricEnabled') ?? false;
-      _dailyReminderEnabled = prefs.getBool('dailyReminderEnabled') ?? true;
-      _smsAutoImportEnabled = prefs.getBool('smsAutoImportEnabled') ?? true;
-      _lowBalanceThreshold = prefs.getDouble('lowBalanceThreshold') ?? 10000.0;
+      _biometricEnabled = prefs.getBool(_userKey('biometricEnabled')) ??
+          prefs.getBool('biometricEnabled') ??
+          false;
+      _dailyReminderEnabled = prefs.getBool(_userKey('dailyReminderEnabled')) ??
+          prefs.getBool('dailyReminderEnabled') ??
+          true;
+      _smsAutoImportEnabled = prefs.getBool(_userKey('smsAutoImportEnabled')) ??
+          prefs.getBool('smsAutoImportEnabled') ??
+          true;
+      _lowBalanceThreshold = prefs.getDouble(_userKey('lowBalanceThreshold')) ??
+          prefs.getDouble('lowBalanceThreshold') ??
+          10000.0;
     });
   }
 
@@ -90,6 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_userKey('biometricEnabled'), value);
     await prefs.setBool('biometricEnabled', value);
     if (mounted) {
       context.read<AuthCubit>().setBiometricEnabled(value);
@@ -105,6 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _toggleDailyReminder(bool value) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_userKey('dailyReminderEnabled'), value);
     await prefs.setBool('dailyReminderEnabled', value);
     setState(() => _dailyReminderEnabled = value);
 
@@ -121,6 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _toggleSmsAutoImport(bool value) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_userKey('smsAutoImportEnabled'), value);
     await prefs.setBool('smsAutoImportEnabled', value);
     setState(() => _smsAutoImportEnabled = value);
   }
@@ -173,6 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result != null) {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_userKey('lowBalanceThreshold'), result);
       await prefs.setDouble('lowBalanceThreshold', result);
       setState(() => _lowBalanceThreshold = result);
     }
@@ -285,7 +303,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Icon(Icons.check_circle_rounded, color: Colors.white),
                   SizedBox(width: 10),
-                  Text('تمت تعبئة 3 محافظ و 20 حركة تجريبية بنجاح! 🚀'),
+                  Expanded(
+                    child: Text('تمت تعبئة 3 محافظ و 20 حركة تجريبية بنجاح! 🚀'),
+                  ),
                 ],
               ),
             ),

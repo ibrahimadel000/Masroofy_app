@@ -211,25 +211,33 @@ class WalletDetailsScreen extends StatelessWidget {
                         children: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    AppConstants.getWalletIcon(wallet.iconCodePoint),
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    wallet.name,
-                                    style: const TextStyle(
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      AppConstants.getWalletIcon(wallet.iconCodePoint),
                                       color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
+                                      size: 28,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        wallet.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
@@ -238,7 +246,7 @@ class WalletDetailsScreen extends StatelessWidget {
                                 ),
                                 child: Text(
                                   '${AppConstants.walletTypes[wallet.type] ?? "محفظة"} (${AppConstants.currencySymbols[wallet.currencyCode] ?? wallet.currencyCode})',
-                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
@@ -346,9 +354,12 @@ class WalletDetailsScreen extends StatelessWidget {
                                     ),
                                     title: Row(
                                       children: [
-                                        Text(
-                                          tx.category,
-                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        Flexible(
+                                          child: Text(
+                                            tx.category,
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
                                         if (tx.source == 'sms') ...[
                                           const SizedBox(width: 8),

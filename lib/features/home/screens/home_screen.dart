@@ -16,6 +16,7 @@ import 'package:mizaan/features/sms/cubit/sms_cubit.dart';
 import 'package:mizaan/features/settings/screens/settings_screen.dart';
 import 'package:mizaan/features/stats/screens/stats_screen.dart';
 import 'package:mizaan/features/wallets/screens/add_wallet_screen.dart';
+import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/features/wallets/screens/wallet_details_screen.dart';
 import 'package:mizaan/features/transactions/screens/transactions_history_screen.dart';
@@ -67,7 +68,10 @@ class _HomeScreenState extends State<HomeScreen> {
       await notif.init();
       final granted = await notif.requestPermission();
       if (granted) {
-        final reminder = prefs.getBool('dailyReminderEnabled') ?? true;
+        final uid = DatabaseService.currentUserId ?? 'guest';
+        final reminder = prefs.getBool('${uid}_dailyReminderEnabled') ??
+            prefs.getBool('dailyReminderEnabled') ??
+            true;
         if (reminder) {
           await notif.scheduleDailyReminder();
         }
@@ -77,7 +81,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _triggerAutoImportIfEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    final autoImportEnabled = prefs.getBool('smsAutoImportEnabled') ?? true;
+    final uid = DatabaseService.currentUserId ?? 'guest';
+    final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
+        prefs.getBool('smsAutoImportEnabled') ??
+        true;
     if (!autoImportEnabled) return;
 
     if (!mounted) return;
@@ -98,7 +105,9 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Icon(Icons.mark_email_read_rounded, color: Colors.white),
               const SizedBox(width: 10),
-              Text('تم استيراد $importedCount حركات تلقائياً من رسائل المحافظ 📩'),
+              Expanded(
+                child: Text('تم استيراد $importedCount حركات تلقائياً من رسائل المحافظ 📩'),
+              ),
             ],
           ),
         ),
