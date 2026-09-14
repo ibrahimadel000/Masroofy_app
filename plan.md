@@ -200,7 +200,7 @@ Repository pattern: write to Hive → attempt Firestore upsert → mark `synced`
 | `/favorites` | Favorites | Pinned wallets with quick actions |
 | `/stats` | Reports | Pie (by category), bar (weekly/monthly), insight cards |
 | `/commission` | Commission Calculator | From-wallet, to-wallet, amount → fee + net received |
-| `/settings` | Settings | Theme, biometric, notifications, SMS senders, threshold, demo data, logout |
+| `/settings` | Settings | Theme, biometric, notifications, SMS senders, threshold, logout |
 
 **Bottom navigation:** الرئيسية • التقارير • المفضلة • الإعدادات
 
@@ -323,7 +323,7 @@ WalletSmsTemplate(
 ---
 
 ### Step 9 — Settings
-Theme selector • biometric toggle • notifications toggle • **SMS auto-import toggle + sender management** (Android) • low-balance threshold • **"تعبئة بيانات تجريبية"** (3 wallets + ~20 transactions across 30 days — for the course demo) • logout.
+Theme selector • biometric toggle • notifications toggle • **SMS auto-import toggle + sender management** (Android) • low-balance threshold • commission calculator • logout.
 
 **Done when:** every setting persists and takes effect immediately.
 
@@ -396,4 +396,4 @@ flutter build apk --release --split-per-abi
 - SMS import works end-to-end on Android (permission → scan → preview → import → dedupe), and is completely hidden on iOS.
 - App runs **fully offline** after login (airplane-mode test).
 - All UI is Arabic/RTL with the bundled font.
-- `mizaan-release.apk` is built, installs, and demo-data seeding works for the live presentation.
+- `mizaan-release.apk` is built and installs cleanly.

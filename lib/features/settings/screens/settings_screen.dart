@@ -7,17 +7,11 @@ import 'package:mizaan/core/constants/sms_senders.dart';
 import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/theme/theme_cubit.dart';
-import 'package:mizaan/data/repositories/transaction_repository.dart';
-import 'package:mizaan/data/repositories/wallet_repository.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
-import 'package:mizaan/data/services/demo_seeder.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/auth/screens/register_screen.dart';
-import 'package:mizaan/features/stats/cubit/stats_cubit.dart';
-import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
-import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -36,7 +30,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _smsAutoImportEnabled = true;
   bool _smsNotificationsEnabled = true;
   double _lowBalanceThreshold = 10000.0;
-  bool _isLoading = false;
 
   @override
   void initState() {
@@ -271,77 +264,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _seedDemoData() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.auto_awesome, color: Colors.amber),
-            SizedBox(width: 8),
-            Text('تعبئة بيانات تجريبية'),
-          ],
-        ),
-        content: const Text(
-          'سيتم إنشاء 3 محافظ يمنية (الكريمي، جيب، كاش) وإضافة 20 حركة تجريبية واقعية موزعة على آخر 30 يوماً لعرض التقارير والإحصائيات بدقة.\n\nهل تود المتابعة؟',
-          style: TextStyle(fontSize: 13, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('تأكيد التعبئة', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      setState(() => _isLoading = true);
-      try {
-        await DemoDataSeeder.seedDemoData(
-          walletRepository: WalletRepository(),
-          transactionRepository: TransactionRepository(),
-        );
-
-        if (mounted) {
-          context.read<WalletsCubit>().loadWallets();
-          context.read<TransactionsCubit>().loadTransactions();
-          context.read<StatsCubit>().loadStats();
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: AppTheme.primaryColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              content: const Row(
-                children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.white),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text('تمت تعبئة 3 محافظ و 20 حركة تجريبية بنجاح! 🚀'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('حدث خطأ أثناء التعبئة: $e')),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
-    }
-  }
-
   Future<void> _logout() async {
     final authState = context.read<AuthCubit>().state;
     final isGuest = authState is Authenticated && authState.isGuest;
@@ -443,10 +365,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildContent() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
       children: [
@@ -583,8 +501,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
         ],
 
-        // Section 5: Tools & Demonstrations
-        _buildSectionHeader('الأدوات والتجربة'),
+        // Section 5: Tools
+        _buildSectionHeader('الأدوات المساعدة'),
         _buildCard([
           ListTile(
             leading: const Icon(Icons.calculate_outlined, color: AppTheme.primaryColor),
@@ -595,17 +513,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             trailing: const Icon(Icons.chevron_left_rounded),
             onTap: () => Navigator.pushNamed(context, AppRoutes.commission),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.auto_awesome, color: Colors.amber),
-            title: const Text('تعبئة بيانات تجريبية (Demo)'),
-            subtitle: const Text(
-              'إضافة 3 محافظ و 20 حركة تجريبية لعرض تقارير التطبيق',
-              style: TextStyle(fontSize: 12),
-            ),
-            trailing: const Icon(Icons.chevron_left_rounded),
-            onTap: _seedDemoData,
           ),
         ]),
         const SizedBox(height: 20),
