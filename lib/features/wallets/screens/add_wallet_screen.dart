@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
 
 class AddWalletScreen extends StatefulWidget {
@@ -52,10 +53,13 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: ResponsiveConstraint(
+            maxWidth: 600,
+            alignment: Alignment.topCenter,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Preview Card
                 Container(
@@ -94,6 +98,8 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
                       const SizedBox(height: 18),
                       Text(
                         _nameController.text.isEmpty ? 'اسم المحفظة' : _nameController.text,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
@@ -101,11 +107,15 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        'الرصيد الافتتاحي: ${_openingBalanceController.text.isEmpty ? "0" : _openingBalanceController.text} ${AppConstants.currencySymbols[_selectedCurrency] ?? "ر.ي"}',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 14,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'الرصيد الافتتاحي: ${_openingBalanceController.text.isEmpty ? "0" : _openingBalanceController.text} ${AppConstants.currencySymbols[_selectedCurrency] ?? "ر.ي"}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
@@ -167,112 +177,121 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Color Picker
+                // Color Picker (Scrollable to prevent small-screen overflow)
                 const Text(
                   'لون المحفظة',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: AppConstants.walletColors.map((color) {
-                    final isSelected = _selectedColor == color;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedColor = color),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? Colors.white : Colors.transparent,
-                            width: 3,
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: AppConstants.walletColors.map((color) {
+                      final isSelected = _selectedColor == color;
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 10.0),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedColor = color),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? Colors.white : Colors.transparent,
+                                width: 3,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withValues(alpha: 0.6),
+                                        blurRadius: 8,
+                                        spreadRadius: 2,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check, color: Colors.white, size: 22)
+                                : null,
                           ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: color.withValues(alpha: 0.6),
-                                    blurRadius: 8,
-                                    spreadRadius: 2,
-                                  ),
-                                ]
-                              : null,
                         ),
-                        child: isSelected
-                            ? const Icon(Icons.check, color: Colors.white, size: 22)
-                            : null,
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
                 ),
                 const SizedBox(height: 20),
 
-                // Icon Picker
+                // Icon Picker (Scrollable to prevent small-screen overflow)
                 const Text(
                   'أيقونة المحفظة',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: AppConstants.walletIcons.map((icon) {
-                    final isSelected = _selectedIcon == icon;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedIcon = icon),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppTheme.primaryColor
-                              : Theme.of(context).cardColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected
-                                ? AppTheme.primaryColor
-                                : Colors.grey.withValues(alpha: 0.3),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: AppConstants.walletIcons.map((icon) {
+                      final isSelected = _selectedIcon == icon;
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 10.0),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedIcon = icon),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppTheme.primaryColor
+                                  : Theme.of(context).cardColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.primaryColor
+                                    : Colors.grey.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Icon(
+                              icon,
+                              color: isSelected ? Colors.white : Colors.grey.shade700,
+                              size: 22,
+                            ),
                           ),
                         ),
-                        child: Icon(
-                          icon,
-                          color: isSelected ? Colors.white : Colors.grey.shade700,
-                          size: 22,
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
                 ),
                 const SizedBox(height: 20),
 
-                // Currency Selector
+                // Currency Selector (Wrap to adapt to any screen width)
                 const Text(
                   'عملة المحفظة',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
-                Row(
+                Wrap(
+                  spacing: 8.0,
+                  runSpacing: 8.0,
                   children: AppConstants.currencyNames.entries.map((entry) {
                     final isSelected = _selectedCurrency == entry.key;
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                        child: ChoiceChip(
-                          label: Text(
-                            AppConstants.currencySymbols[entry.key] ?? entry.key,
-                            style: TextStyle(
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              color: isSelected ? AppTheme.primaryColor : null,
-                            ),
-                          ),
-                          selected: isSelected,
-                          selectedColor: AppTheme.primaryColor.withValues(alpha: 0.18),
-                          checkmarkColor: AppTheme.primaryColor,
-                          onSelected: (val) {
-                            if (val) setState(() => _selectedCurrency = entry.key);
-                          },
+                    return ChoiceChip(
+                      label: Text(
+                        AppConstants.currencySymbols[entry.key] ?? entry.key,
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected ? AppTheme.primaryColor : null,
                         ),
                       ),
+                      selected: isSelected,
+                      selectedColor: AppTheme.primaryColor.withValues(alpha: 0.18),
+                      checkmarkColor: AppTheme.primaryColor,
+                      onSelected: (val) {
+                        if (val) setState(() => _selectedCurrency = entry.key);
+                      },
                     );
                   }).toList(),
                 ),
@@ -325,6 +344,7 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

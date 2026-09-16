@@ -216,7 +216,7 @@ class SmsService {
       );
       if (matchedWallet == null) return null;
 
-      final matchedWalletId = matchedWallet!.id;
+      final matchedWalletId = matchedWallet.id;
       final walletName = matchedWallet.name;
       final currencyCode = matchedWallet.currencyCode;
 

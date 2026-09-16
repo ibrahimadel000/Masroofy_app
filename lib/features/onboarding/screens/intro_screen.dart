@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/auth/screens/biometric_gate_screen.dart';
@@ -81,86 +82,91 @@ class _IntroScreenState extends State<IntroScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: [
-            // Top Bar: Skip button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: isLastPage
-                    ? const SizedBox(height: 48)
-                    : TextButton(
-                        onPressed: _completeIntro,
-                        child: const Text(
-                          'تخطي',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-
-            // Page View
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: _slides.length,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                },
-                itemBuilder: (context, index) {
-                  final slide = _slides[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 130,
-                          height: 130,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                              width: 2,
+        child: ResponsiveConstraint(
+          maxWidth: 550,
+          alignment: Alignment.center,
+          child: Column(
+            children: [
+              // Top Bar: Skip button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: isLastPage
+                      ? const SizedBox(height: 48)
+                      : TextButton(
+                          onPressed: _completeIntro,
+                          child: const Text(
+                            'تخطي',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
                             ),
                           ),
-                          child: Icon(
-                            slide.icon,
-                            size: 64,
-                            color: AppTheme.primaryColor,
-                          ),
                         ),
-                        const SizedBox(height: 40),
-                        Text(
-                          slide.title,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          slide.description,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            color: Colors.grey,
-                            height: 1.6,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                ),
               ),
-            ),
+
+              // Page View
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: _slides.length,
+                  onPageChanged: (index) {
+                    setState(() => _currentIndex = index);
+                  },
+                  itemBuilder: (context, index) {
+                    final slide = _slides[index];
+                    return Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 12.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Icon(
+                                slide.icon,
+                                size: 58,
+                                color: AppTheme.primaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            Text(
+                              slide.title,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              slide.description,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
 
             // Bottom Area: Indicators & Navigation Button
             Padding(
@@ -223,7 +229,8 @@ class _IntroScreenState extends State<IntroScreen> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

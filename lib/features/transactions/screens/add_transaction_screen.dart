@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/utils/balance_calculator.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
@@ -270,8 +271,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             return Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(28.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: ResponsiveConstraint(
+                  maxWidth: 550,
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
                       padding: const EdgeInsets.all(22),
@@ -350,18 +354,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   ],
                 ),
               ),
-            );
-          }
+            ),
+          );
+        }
 
           _selectedWalletId ??= wallets.first.id;
 
           return SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: ResponsiveConstraint(
+                maxWidth: 600,
+                alignment: Alignment.topCenter,
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Income / Expense Toggle
                     Container(
@@ -615,8 +623,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ),
               ),
             ),
-          );
-        },
+          ),
+        );
+      },
       ),
     );
   }

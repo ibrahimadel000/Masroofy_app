@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/utils/balance_calculator.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
@@ -335,11 +336,14 @@ class _HomeMainView extends StatelessWidget {
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
                 padding: const EdgeInsets.symmetric(vertical: 12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 1. Total Balance Card
-                    _buildTotalBalanceCard(totalsByCurrency, todaySpending),
+                child: ResponsiveConstraint(
+                  maxWidth: 1050,
+                  alignment: Alignment.topCenter,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 1. Total Balance Card
+                      _buildTotalBalanceCard(totalsByCurrency, todaySpending),
 
                     const SizedBox(height: 24),
 
@@ -426,7 +430,8 @@ class _HomeMainView extends StatelessWidget {
                   ],
                 ),
               ),
-            );
+            ),
+          );
           },
         );
       },
@@ -489,13 +494,17 @@ class _HomeMainView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            AppConstants.formatCurrency(primaryEntry.value, primaryEntry.key),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              AppConstants.formatCurrency(primaryEntry.value, primaryEntry.key),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
           if (hasMultipleCurrencies) ...[
@@ -611,7 +620,7 @@ class _HomeMainView extends StatelessWidget {
                 );
               },
               child: Container(
-                width: 130,
+                width: context.isTablet ? 150 : 130,
                 margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
                 decoration: BoxDecoration(
                   border: Border.all(
@@ -658,7 +667,7 @@ class _HomeMainView extends StatelessWidget {
               );
             },
             child: Container(
-              width: 175,
+              width: context.isTablet ? 215 : 175,
               margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(

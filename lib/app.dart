@@ -131,9 +131,19 @@ class MizaanApp extends StatelessWidget {
               darkTheme: AppTheme.darkTheme,
               themeMode: themeMode,
               builder: (context, child) {
-                return Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: _AppLifecycleGate(child: child ?? const SizedBox.shrink()),
+                final mediaQuery = MediaQuery.of(context);
+                final clampedMediaQuery = mediaQuery.copyWith(
+                  textScaler: mediaQuery.textScaler.clamp(
+                    minScaleFactor: 0.85,
+                    maxScaleFactor: 1.30,
+                  ),
+                );
+                return MediaQuery(
+                  data: clampedMediaQuery,
+                  child: Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: _AppLifecycleGate(child: child ?? const SizedBox.shrink()),
+                  ),
                 );
               },
               onGenerateRoute: (settings) => AppRoutes.onGenerateRoute(settings, prefs),

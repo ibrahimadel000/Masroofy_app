@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/utils/balance_calculator.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
@@ -189,8 +190,11 @@ class WalletDetailsScreen extends StatelessWidget {
                 label: const Text('➕ حركة لهذه المحفظة'),
               ),
               body: SafeArea(
-                child: Column(
-                  children: [
+                child: ResponsiveConstraint(
+                  maxWidth: 850,
+                  alignment: Alignment.topCenter,
+                  child: Column(
+                    children: [
                     // Wallet Balance Card
                     Container(
                       margin: const EdgeInsets.all(16.0),
@@ -257,12 +261,16 @@ class WalletDetailsScreen extends StatelessWidget {
                             style: TextStyle(color: Colors.white70, fontSize: 13),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            AppConstants.formatCurrency(liveBalance, wallet.currencyCode),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              AppConstants.formatCurrency(liveBalance, wallet.currencyCode),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -412,7 +420,8 @@ class WalletDetailsScreen extends StatelessWidget {
                   ],
                 ),
               ),
-            );
+            ),
+          );
           },
         );
       },

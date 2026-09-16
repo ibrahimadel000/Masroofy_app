@@ -31,29 +31,15 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   bool get isBiometricEnabled {
-    final uid = authRepository.currentUser?.uid;
-    if (uid != null) {
-      return prefs.getBool('${uid}_$keyBiometricEnabled') ??
-          prefs.getBool(keyBiometricEnabled) ??
-          false;
-    }
-    if (isGuestLoggedIn) {
-      return prefs.getBool('guest_$keyBiometricEnabled') ??
-          prefs.getBool(keyBiometricEnabled) ??
-          false;
-    }
-    return false;
+    return prefs.getBool(_biometricKey) ??
+        prefs.getBool(keyBiometricEnabled) ??
+        false;
   }
 
   bool get isGuestLoggedIn => prefs.getBool(keyGuestLoggedIn) ?? false;
 
   Future<void> setBiometricEnabled(bool enabled) async {
-    final uid = authRepository.currentUser?.uid;
-    if (uid != null) {
-      await prefs.setBool('${uid}_$keyBiometricEnabled', enabled);
-    } else if (isGuestLoggedIn) {
-      await prefs.setBool('guest_$keyBiometricEnabled', enabled);
-    }
+    await prefs.setBool(_biometricKey, enabled);
     await prefs.setBool(keyBiometricEnabled, enabled);
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
@@ -134,10 +135,13 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
               }
             }
 
-            return Column(
-              children: [
-                // Top Search & Filter Bar
-                _buildSearchAndFiltersHeader(wallets),
+            return ResponsiveConstraint(
+              maxWidth: 950,
+              alignment: Alignment.topCenter,
+              child: Column(
+                children: [
+                  // Top Search & Filter Bar
+                  _buildSearchAndFiltersHeader(wallets),
 
                 // Metrics Summary Strip for the filtered results
                 if (filtered.isNotEmpty) _buildSummaryStrip(filtered.length, totalIncome, totalExpense),
@@ -155,9 +159,10 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
                         ),
                 ),
               ],
-            );
-          },
-        );
+            ),
+          );
+        },
+      );
       },
     );
 

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/core/utils/stats_calculator.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
@@ -149,9 +150,12 @@ class _StatsScreenState extends State<StatsScreen> {
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+            child: ResponsiveConstraint(
+              maxWidth: 1100,
+              alignment: Alignment.topCenter,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 // 1. Month Navigation Header
                 _buildMonthHeader(state.selectedMonth),
                 const SizedBox(height: 14),
@@ -196,7 +200,8 @@ class _StatsScreenState extends State<StatsScreen> {
               ],
             ),
           ),
-        );
+        ),
+      );
       },
     );
   }
@@ -584,60 +589,75 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _buildFinancialOverviewGrid(StatsResult result) {
     final net = result.netSavings;
     final isNetPositive = net >= 0;
+    final isWide = MediaQuery.sizeOf(context).width >= 768;
+
+    final cardIncome = _buildMetricCard(
+      title: 'إجمالي الدخل',
+      value: '${_fmt.format(result.totalMonthlyIncome)} ر.ي',
+      subtitle: 'إيداعات ورواتب',
+      icon: Icons.arrow_downward_rounded,
+      iconColor: Colors.green.shade700,
+      bgColor: Colors.green.shade50,
+    );
+
+    final cardExpense = _buildMetricCard(
+      title: 'إجمالي المصروفات',
+      value: '${_fmt.format(result.totalMonthlyExpense)} ر.ي',
+      subtitle: 'مصاريف وسداد',
+      icon: Icons.arrow_upward_rounded,
+      iconColor: Colors.red.shade700,
+      bgColor: Colors.red.shade50,
+    );
+
+    final cardNet = _buildMetricCard(
+      title: 'صافي الوفر',
+      value: '${_fmt.format(net.abs())} ر.ي',
+      subtitle: isNetPositive ? 'وفر إيجابي 🎉' : 'عجز مصروفات ⚠️',
+      icon: isNetPositive ? Icons.savings_rounded : Icons.warning_amber_rounded,
+      iconColor: isNetPositive ? AppTheme.primaryColor : Colors.orange.shade800,
+      bgColor: isNetPositive ? Colors.teal.shade50 : Colors.orange.shade50,
+    );
+
+    final cardDaily = _buildMetricCard(
+      title: 'المعدل اليومي',
+      value: '${_fmt.format(result.dailyAverage)} ر.ي',
+      subtitle: result.isCurrentMonth
+          ? 'صرف يومي (${result.daysElapsed} يوم)'
+          : 'معدل الشهر (${result.totalDaysInMonth} يوم)',
+      icon: Icons.speed_rounded,
+      iconColor: Colors.blue.shade600,
+      bgColor: Colors.blue.shade50,
+    );
+
+    if (isWide) {
+      return Row(
+        children: [
+          Expanded(child: cardIncome),
+          const SizedBox(width: 12),
+          Expanded(child: cardExpense),
+          const SizedBox(width: 12),
+          Expanded(child: cardNet),
+          const SizedBox(width: 12),
+          Expanded(child: cardDaily),
+        ],
+      );
+    }
 
     return Column(
       children: [
         Row(
           children: [
-            Expanded(
-              child: _buildMetricCard(
-                title: 'إجمالي الدخل',
-                value: '${_fmt.format(result.totalMonthlyIncome)} ر.ي',
-                subtitle: 'إيداعات ورواتب',
-                icon: Icons.arrow_downward_rounded,
-                iconColor: Colors.green.shade700,
-                bgColor: Colors.green.shade50,
-              ),
-            ),
+            Expanded(child: cardIncome),
             const SizedBox(width: 12),
-            Expanded(
-              child: _buildMetricCard(
-                title: 'إجمالي المصروفات',
-                value: '${_fmt.format(result.totalMonthlyExpense)} ر.ي',
-                subtitle: 'مصاريف وسداد',
-                icon: Icons.arrow_upward_rounded,
-                iconColor: Colors.red.shade700,
-                bgColor: Colors.red.shade50,
-              ),
-            ),
+            Expanded(child: cardExpense),
           ],
         ),
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: _buildMetricCard(
-                title: 'صافي الوفر',
-                value: '${_fmt.format(net.abs())} ر.ي',
-                subtitle: isNetPositive ? 'وفر إيجابي 🎉' : 'عجز مصروفات ⚠️',
-                icon: isNetPositive ? Icons.savings_rounded : Icons.warning_amber_rounded,
-                iconColor: isNetPositive ? AppTheme.primaryColor : Colors.orange.shade800,
-                bgColor: isNetPositive ? Colors.teal.shade50 : Colors.orange.shade50,
-              ),
-            ),
+            Expanded(child: cardNet),
             const SizedBox(width: 12),
-            Expanded(
-              child: _buildMetricCard(
-                title: 'المعدل اليومي',
-                value: '${_fmt.format(result.dailyAverage)} ر.ي',
-                subtitle: result.isCurrentMonth
-                    ? 'صرف يومي تقريبي (${result.daysElapsed} يوم)'
-                    : 'معدل الشهر (${result.totalDaysInMonth} يوم)',
-                icon: Icons.speed_rounded,
-                iconColor: Colors.blue.shade600,
-                bgColor: Colors.blue.shade50,
-              ),
-            ),
+            Expanded(child: cardDaily),
           ],
         ),
       ],
@@ -1042,11 +1062,14 @@ class _StatsScreenState extends State<StatsScreen> {
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              maxLines: 1,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -1156,109 +1179,148 @@ class _StatsScreenState extends State<StatsScreen> {
               ),
             ),
           ] else ...[
-            // Donut Pie Chart
-            SizedBox(
-              height: 200,
-              child: PieChart(
-                PieChartData(
-                  pieTouchData: PieTouchData(
-                    touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                      setState(() {
-                        if (!event.isInterestedForInteractions ||
-                            pieTouchResponse == null ||
-                            pieTouchResponse.touchedSection == null) {
-                          _touchedPieIndex = -1;
-                          return;
-                        }
-                        _touchedPieIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
-                      });
-                    },
-                  ),
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 46,
-                  sections: List.generate(entries.length, (i) {
-                    final entry = entries[i];
-                    final isTouched = i == _touchedPieIndex;
-                    final radius = isTouched ? 48.0 : 40.0;
-                    final pct = total > 0 ? (entry.value / total) * 100 : 0.0;
-                    final color = _getCategoryColor(entry.key);
+            Builder(
+              builder: (context) {
+                final isWide = MediaQuery.sizeOf(context).width >= 768;
 
-                    return PieChartSectionData(
-                      value: entry.value,
-                      title: pct >= 8 ? '${pct.toStringAsFixed(0)}%' : '',
-                      color: color,
-                      radius: radius,
-                      titleStyle: TextStyle(
-                        fontSize: isTouched ? 14 : 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                final pieChartWidget = SizedBox(
+                  height: 210,
+                  child: PieChart(
+                    PieChartData(
+                      pieTouchData: PieTouchData(
+                        touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                          setState(() {
+                            if (!event.isInterestedForInteractions ||
+                                pieTouchResponse == null ||
+                                pieTouchResponse.touchedSection == null) {
+                              _touchedPieIndex = -1;
+                              return;
+                            }
+                            _touchedPieIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                          });
+                        },
                       ),
-                    );
-                  }),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 46,
+                      sections: List.generate(entries.length, (i) {
+                        final entry = entries[i];
+                        final isTouched = i == _touchedPieIndex;
+                        final radius = isTouched ? 48.0 : 40.0;
+                        final pct = total > 0 ? (entry.value / total) * 100 : 0.0;
+                        final color = _getCategoryColor(entry.key);
 
-            // Detailed List of Categories
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            ...entries.map((entry) {
-              final pct = total > 0 ? (entry.value / total) * 100 : 0.0;
-              final color = _getCategoryColor(entry.key);
-              final count = counts[entry.key] ?? 0;
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6.0),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: color.withValues(alpha: 0.15),
-                          child: Icon(_getCategoryIcon(entry.key), size: 16, color: color),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                entry.key,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              Text(
-                                '$count حركات • ${pct.toStringAsFixed(1)}%',
-                                style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          '${_fmt.format(entry.value)} ر.ي',
-                          style: TextStyle(
+                        return PieChartSectionData(
+                          value: entry.value,
+                          title: pct >= 8 ? '${pct.toStringAsFixed(0)}%' : '',
+                          color: color,
+                          radius: radius,
+                          titleStyle: TextStyle(
+                            fontSize: isTouched ? 14 : 11,
                             fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: isExpense ? Colors.red.shade700 : Colors.green.shade700,
+                            color: Colors.white,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                );
+
+                final categoryItems = entries.map((entry) {
+                  final pct = total > 0 ? (entry.value / total) * 100 : 0.0;
+                  final color = _getCategoryColor(entry.key);
+                  final count = counts[entry.key] ?? 0;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6.0),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundColor: color.withValues(alpha: 0.15),
+                              child: Icon(_getCategoryIcon(entry.key), size: 16, color: color),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    entry.key,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  Text(
+                                    '$count حركات • ${pct.toStringAsFixed(1)}%',
+                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              '${_fmt.format(entry.value)} ر.ي',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: isExpense ? Colors.red.shade700 : Colors.green.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: (pct / 100).clamp(0.0, 1.0),
+                            minHeight: 5,
+                            backgroundColor: Colors.grey.shade100,
+                            valueColor: AlwaysStoppedAnimation<Color>(color),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: (pct / 100).clamp(0.0, 1.0),
-                        minHeight: 5,
-                        backgroundColor: Colors.grey.shade100,
-                        valueColor: AlwaysStoppedAnimation<Color>(color),
+                  );
+                }).toList();
+
+                if (isWide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 280,
+                        child: Column(
+                          children: [
+                            pieChartWidget,
+                            const SizedBox(height: 12),
+                            Text(
+                              'إجمالي: ${_fmt.format(total)} ر.ي',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: categoryItems,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                return Column(
+                  children: [
+                    pieChartWidget,
+                    const SizedBox(height: 20),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    ...categoryItems,
                   ],
-                ),
-              );
-            }),
+                );
+              },
+            ),
           ],
         ],
       ),

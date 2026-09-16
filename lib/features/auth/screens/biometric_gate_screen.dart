@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
@@ -147,9 +148,12 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
                     }
                   }
 
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                  return ResponsiveConstraint(
+                    maxWidth: 480,
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                       ScaleTransition(
                         scale: _pulseAnimation,
                         child: Container(
@@ -250,8 +254,9 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
                         ),
                       ),
                     ],
-                  );
-                },
+                  ),
+                );
+              },
               ),
             ),
           ),

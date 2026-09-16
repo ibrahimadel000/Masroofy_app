@@ -76,7 +76,7 @@ class SmartSmsParser {
     final detectedCurrency = detectCurrency(normalized);
 
     // Pass 1: Extract Balance and isolate its position
-    final balanceMatch = extractBalance(normalized);
+    final balanceMatch = _extractBalance(normalized);
     final double? balance = balanceMatch?.amount;
     String textWithoutBalance = normalized;
 
@@ -89,7 +89,7 @@ class SmartSmsParser {
     }
 
     // Pass 2: Extract Transaction Operation Amount from masked text
-    final operationMatch = extractOperation(textWithoutBalance);
+    final operationMatch = _extractOperation(textWithoutBalance);
 
     final double? amount = operationMatch?.amount;
     final String? type = operationMatch?.type;
@@ -138,30 +138,23 @@ class SmartSmsParser {
   }
 
   /// Pass 1: Balance Extraction
-  static _NumberSpan? extractBalance(String text) {
+  static _NumberSpan? _extractBalance(String text) {
+    final balKw = balanceKeywords.map(RegExp.escape).join('|');
     final patterns = [
       // Direct balance: "رصيدك YER 4,045.30", "الرصيد: 3000 ر.س", "Avail Bal: $1,250"
       RegExp(
-        r'(?:' + balanceKeywords.map(RegExp.escape).join('|') + r')'
-        r'[\s:]*(?:هو|is|:|=)?[\s:]*'
-        r'(?:' + currencyPattern + r')?[\s:]*'
-        r'([0-9,]+(?:\.[0-9]+)?)',
+        '(?:$balKw)[\\s:]*(?:هو|is|:|=)?[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
         caseSensitive: false,
       ),
       // Intervening clause: "available balance for account ending in 9876 is USD 3,500.00"
       RegExp(
-        r'(?:' + balanceKeywords.map(RegExp.escape).join('|') + r')'
-        r'[\s\S]*?(?:هو|is|:|=)[\s:]*'
-        r'(?:' + currencyPattern + r')?[\s:]*'
-        r'([0-9,]+(?:\.[0-9]+)?)',
+        '(?:$balKw)[\\s\\S]*?(?:هو|is|:|=)[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
         caseSensitive: false,
         dotAll: true,
       ),
       // Suffix balance: "4,045.30 YER رصيدك", "$1,250 Avail Bal"
       RegExp(
-        r'([0-9,]+(?:\.[0-9]+)?)[\s:]*'
-        r'(?:' + currencyPattern + r')+[\s:]*'
-        r'(?:' + balanceKeywords.map(RegExp.escape).join('|') + r')',
+        '([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)+[\\s:]*(?:$balKw)',
         caseSensitive: false,
       ),
     ];
@@ -189,21 +182,17 @@ class SmartSmsParser {
   }
 
   /// Pass 2: Operation Amount & Type Extraction
-  static _OperationResult? extractOperation(String text) {
+  static _OperationResult? _extractOperation(String text) {
+    final incKw = incomeKeywords.map(RegExp.escape).join('|');
     // Check Income patterns
     final incomePatterns = [
       RegExp(
-        r'(?:' + incomeKeywords.map(RegExp.escape).join('|') + r')'
-        r'[\s\S]*?(?:ب?مبلغ|ب?قيمة|with|by|amount)?[\s:]*'
-        r'(?:' + currencyPattern + r')?[\s:]*'
-        r'([0-9,]+(?:\.[0-9]+)?)',
+        '(?:$incKw)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|with|by|amount)?[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
         caseSensitive: false,
         dotAll: true,
       ),
       RegExp(
-        r'([0-9,]+(?:\.[0-9]+)?)[\s:]*'
-        r'(?:' + currencyPattern + r')?[\s:]*'
-        r'(?:' + incomeKeywords.map(RegExp.escape).join('|') + r')',
+        '([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)?[\\s:]*(?:$incKw)',
         caseSensitive: false,
       ),
     ];
@@ -223,20 +212,16 @@ class SmartSmsParser {
       }
     }
 
+    final expKw = expenseKeywords.map(RegExp.escape).join('|');
     // Check Expense patterns
     final expensePatterns = [
       RegExp(
-        r'(?:' + expenseKeywords.map(RegExp.escape).join('|') + r')'
-        r'[\s\S]*?(?:ب?مبلغ|ب?قيمة|with|by|for|amount)?[\s:]*'
-        r'(?:' + currencyPattern + r')?[\s:]*'
-        r'([0-9,]+(?:\.[0-9]+)?)',
+        '(?:$expKw)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|with|by|for|amount)?[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
         caseSensitive: false,
         dotAll: true,
       ),
       RegExp(
-        r'([0-9,]+(?:\.[0-9]+)?)[\s:]*'
-        r'(?:' + currencyPattern + r')?[\s:]*'
-        r'(?:' + expenseKeywords.map(RegExp.escape).join('|') + r')',
+        '([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)?[\\s:]*(?:$expKw)',
         caseSensitive: false,
       ),
     ];
@@ -269,24 +254,19 @@ class SmartSmsParser {
     final currRegex = currencyPattern;
 
     final incomeStrings = [
-      r'(?:إيداع|ايداع|تم إيداع|تم استلام|وارد|حوالة واردة|اضيف|أضيف|أودع|اودع|credited|deposit|deposited|received)[\s\S]*?(?:ب?مبلغ|ب?قيمة|amount|with)?\s*' +
-          currRegex +
-          r'?\s*([0-9,]+(?:\.[0-9]+)?)',
+      '(?:إيداع|ايداع|تم إيداع|تم استلام|وارد|حوالة واردة|اضيف|أضيف|أودع|اودع|credited|deposit|deposited|received)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|amount|with)?\\s*'
+          '$currRegex?\\s*([0-9,]+(?:\\.[0-9]+)?)',
     ];
 
     final expenseStrings = [
-      r'(?:خصم|تم خصم|سداد|تم سداد|سحب|تم سحب|شراء|تم شراء|مشتريات|تحويل|debited|spent|paid|payment|withdrawn|purchase)[\s\S]*?(?:ب?مبلغ|ب?قيمة|amount|for)?\s*' +
-          currRegex +
-          r'?\s*([0-9,]+(?:\.[0-9]+)?)',
+      '(?:خصم|تم خصم|سداد|تم سداد|سحب|تم سحب|شراء|تم شراء|مشتريات|تحويل|debited|spent|paid|payment|withdrawn|purchase)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|amount|for)?\\s*'
+          '$currRegex?\\s*([0-9,]+(?:\\.[0-9]+)?)',
     ];
 
     final balanceStrings = [
-      r'(?:رصيدك|الرصيد|رصيد|رص|balance|avail bal|available balance)[\s:]*(?:الحالي|المتبقي|المتوفر|المتاح|هو|is|:)?\s*' +
-          currRegex +
-          r'?\s*([0-9,]+(?:\.[0-9]+)?)',
-      r'([0-9,]+(?:\.[0-9]+)?)\s*' +
-          currRegex +
-          r'+\s*(?:رصيدك|رص|balance|bal)',
+      '(?:رصيدك|الرصيد|رصيد|رص|balance|avail bal|available balance)[\\s:]*(?:الحالي|المتبقي|المتوفر|المتاح|هو|is|:)?\\s*'
+          '$currRegex?\\s*([0-9,]+(?:\\.[0-9]+)?)',
+      '([0-9,]+(?:\\.[0-9]+)?)\\s*$currRegex+\\s*(?:رصيدك|رص|balance|bal)',
     ];
 
     return WalletSmsTemplate.fromStrings(

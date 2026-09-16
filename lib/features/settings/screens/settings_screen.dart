@@ -7,6 +7,7 @@ import 'package:mizaan/core/constants/sms_senders.dart';
 import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/theme/theme_cubit.dart';
+import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
@@ -235,26 +236,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('حد الرصيد المنخفض'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'أدخل المبلغ بالريال اليمني الذي إذا نقص رصيد أي محفظة عنه يتم تنبيهك فوراً:',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'المبلغ (ر.ي)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.warning_amber_rounded, color: Colors.amber),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'أدخل المبلغ بالريال اليمني الذي إذا نقص رصيد أي محفظة عنه يتم تنبيهك فوراً:',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'المبلغ (ر.ي)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -296,37 +299,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         content: SizedBox(
           width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'المرسلون المعتمدون المدعومون حالياً:',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-              const SizedBox(height: 12),
-              ...SmsSenderRegistry.defaultTemplates.map((tpl) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.check_circle_outline, size: 18, color: Colors.green),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '${tpl.walletNameAr}: ${tpl.senderIds.join(', ')}',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'المرسلون المعتمدون المدعومون حالياً:',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                ...SmsSenderRegistry.defaultTemplates.map((tpl) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.check_circle_outline, size: 18, color: Colors.green),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${tpl.walletNameAr}: ${tpl.senderIds.join(', ')}',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  )),
-              const Divider(),
-              const Text(
-                'نظام ميزان يتعرف تلقائياً على رسائل الإيداع والخصم والسداد بدقة تامة.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+                        ],
+                      ),
+                    )),
+                const Divider(),
+                const Text(
+                  'نظام ميزان يتعرف تلقائياً على رسائل الإيداع والخصم والسداد بدقة تامة.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -440,246 +445,250 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildContent() {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-      children: [
-        // Section 0: Account Status / Link Profile
-        _buildAccountCard(),
+    return ResponsiveConstraint(
+      maxWidth: 750,
+      alignment: Alignment.topCenter,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+        children: [
+          // Section 0: Account Status / Link Profile
+          _buildAccountCard(),
 
-        // Section 1: Appearance & Theme
-        _buildSectionHeader('المظهر والعرض'),
-        _buildCard([
-          BlocBuilder<ThemeCubit, ThemeMode>(
-            builder: (context, themeMode) {
-              return ListTile(
-                leading: const Icon(Icons.palette_outlined, color: AppTheme.primaryColor),
-                title: const Text('مظهر التطبيق'),
-                subtitle: Text(
-                  themeMode == ThemeMode.system
-                      ? 'تلقائي (حسب النظام)'
-                      : (themeMode == ThemeMode.dark ? 'الوضع الليلي 🌙' : 'الوضع الفاتح ☀️'),
-                  style: const TextStyle(fontSize: 12),
-                ),
-                trailing: DropdownButton<ThemeMode>(
-                  value: themeMode,
-                  underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(
-                      value: ThemeMode.system,
-                      child: Text('النظام'),
-                    ),
-                    DropdownMenuItem(
-                      value: ThemeMode.light,
-                      child: Text('فاتح'),
-                    ),
-                    DropdownMenuItem(
-                      value: ThemeMode.dark,
-                      child: Text('ليلي'),
-                    ),
-                  ],
-                  onChanged: (newMode) {
-                    if (newMode != null) {
-                      context.read<ThemeCubit>().setThemeMode(newMode);
-                    }
-                  },
-                ),
-              );
-            },
-          ),
-        ]),
-        const SizedBox(height: 16),
-
-        // Section 2: Security & Biometrics
-        _buildSectionHeader('الأمان والحماية'),
-        _buildCard([
-          SwitchListTile(
-            activeThumbColor: AppTheme.primaryColor,
-            secondary: const Icon(Icons.fingerprint_rounded, color: AppTheme.primaryColor),
-            title: const Text('قفل التطبيق بالبصمة / Face ID'),
-            subtitle: const Text(
-              'طلب تأكيد الهوية عند فتح التطبيق أو العودة إليه لحماية بياناتك المالية',
-              style: TextStyle(fontSize: 12),
-            ),
-            value: _biometricEnabled,
-            onChanged: _toggleBiometric,
-          ),
-        ]),
-        const SizedBox(height: 16),
-
-        // Section 3: Notifications & Alerts
-        _buildSectionHeader('الإشعارات والتنبيهات (شريط الهاتف)'),
-        if (!_systemNotificationsGranted)
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.amber.shade50,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.amber.shade300),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.notifications_off_rounded, color: Colors.amber.shade800),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'إشعارات الهاتف معطّلة في النظام',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber.shade900,
-                          fontSize: 13,
-                        ),
+          // Section 1: Appearance & Theme
+          _buildSectionHeader('المظهر والعرض'),
+          _buildCard([
+            BlocBuilder<ThemeCubit, ThemeMode>(
+              builder: (context, themeMode) {
+                return ListTile(
+                  leading: const Icon(Icons.palette_outlined, color: AppTheme.primaryColor),
+                  title: const Text('مظهر التطبيق'),
+                  subtitle: Text(
+                    themeMode == ThemeMode.system
+                        ? 'تلقائي (حسب النظام)'
+                        : (themeMode == ThemeMode.dark ? 'الوضع الليلي 🌙' : 'الوضع الفاتح ☀️'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: DropdownButton<ThemeMode>(
+                    value: themeMode,
+                    underline: const SizedBox(),
+                    items: const [
+                      DropdownMenuItem(
+                        value: ThemeMode.system,
+                        child: Text('النظام'),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'لتصلك تنبيهات العمليات في شريط الهاتف بالأعلى، يرجى السماح بالإشعارات من إعدادات الهاتف.',
-                        style: TextStyle(color: Colors.amber.shade900, fontSize: 11),
+                      DropdownMenuItem(
+                        value: ThemeMode.light,
+                        child: Text('فاتح'),
+                      ),
+                      DropdownMenuItem(
+                        value: ThemeMode.dark,
+                        child: Text('ليلي'),
                       ),
                     ],
+                    onChanged: (newMode) {
+                      if (newMode != null) {
+                        context.read<ThemeCubit>().setThemeMode(newMode);
+                      }
+                    },
                   ),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    await NotificationService().openSettings();
-                    await Future.delayed(const Duration(seconds: 1));
-                    _checkPermissionStatus();
-                  },
-                  child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-        _buildCard([
-          ListTile(
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withAlpha(25),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.send_to_mobile_rounded, color: AppTheme.primaryColor),
-            ),
-            title: const Text(
-              'إرسال إشعار تجريبي للهاتف',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: const Text(
-              'اضغط هنا لتجربة ورؤية الإشعار ينبثق فوراً في شريط هاتفك العلوي',
-              style: TextStyle(fontSize: 12),
-            ),
-            trailing: const Icon(Icons.chevron_left_rounded),
-            onTap: _sendTestNotification,
-          ),
-          const Divider(height: 1),
-          SwitchListTile(
-            activeThumbColor: AppTheme.primaryColor,
-            secondary: const Icon(Icons.receipt_long_rounded, color: AppTheme.primaryColor),
-            title: const Text('إشعارات العمليات المالية'),
-            subtitle: const Text(
-              'تنبيه فوري في شريط الهاتف عند تسجيل أي مصروف أو إيداع يدوياً',
-              style: TextStyle(fontSize: 12),
-            ),
-            value: _manualTxNotificationsEnabled,
-            onChanged: _toggleManualTxNotifications,
-          ),
-          const Divider(height: 1),
-          SwitchListTile(
-            activeThumbColor: AppTheme.primaryColor,
-            secondary: const Icon(Icons.notifications_active_outlined, color: AppTheme.primaryColor),
-            title: const Text('التذكير اليومي'),
-            subtitle: const Text(
-              'تذكير في الساعة 9:00 مساءً لتسجيل مصروفات اليوم',
-              style: TextStyle(fontSize: 12),
-            ),
-            value: _dailyReminderEnabled,
-            onChanged: _toggleDailyReminder,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.warning_amber_rounded, color: Colors.amber),
-            title: const Text('تنبيه الرصيد المنخفض'),
-            subtitle: Text(
-              'التنبيه عندما ينقص رصيد المحفظة عن ${_fmt.format(_lowBalanceThreshold)} ر.ي',
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: const Icon(Icons.chevron_left_rounded),
-            onTap: _editThresholdDialog,
-          ),
-        ]),
-        const SizedBox(height: 16),
-
-        // Section 4: SMS Automation (Android only)
-        if (Platform.isAndroid) ...[
-          _buildSectionHeader('أتمتة الرسائل (SMS)'),
-          _buildCard([
-            SwitchListTile(
-              activeThumbColor: AppTheme.primaryColor,
-              secondary: const Icon(Icons.mark_email_read_rounded, color: AppTheme.primaryColor),
-              title: const Text('الاستيراد التلقائي للرسائل'),
-              subtitle: const Text(
-                'استيراد حركات المحافظ في الخلفية فور وصول الرسالة أو فتح التطبيق',
-                style: TextStyle(fontSize: 12),
-              ),
-              value: _smsAutoImportEnabled,
-              onChanged: _toggleSmsAutoImport,
-            ),
-            const Divider(height: 1),
-            SwitchListTile(
-              activeThumbColor: AppTheme.primaryColor,
-              secondary: const Icon(Icons.notifications_active_rounded, color: AppTheme.primaryColor),
-              title: const Text('إشعارات الحركات (SMS)'),
-              subtitle: const Text(
-                'تنبيه فوري عند وصول رسائل عمليات الإيداع أو المشتريات والخصم',
-                style: TextStyle(fontSize: 12),
-              ),
-              value: _smsNotificationsEnabled,
-              onChanged: _toggleSmsNotifications,
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryColor),
-              title: const Text('إدارة مرسلي المحافظ'),
-              subtitle: const Text(
-                'عرض قائمة مرسلي الرسائل المدعومين',
-                style: TextStyle(fontSize: 12),
-              ),
-              trailing: const Icon(Icons.chevron_left_rounded),
-              onTap: _showSmsSendersDialog,
+                );
+              },
             ),
           ]),
           const SizedBox(height: 16),
-        ],
 
-        // Section 5: Logout
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.red.shade50,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.red.shade200),
-          ),
-          child: ListTile(
-            leading: const Icon(Icons.logout_rounded, color: Colors.red),
-            title: const Text(
-              'تسجيل الخروج',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          // Section 2: Security & Biometrics
+          _buildSectionHeader('الأمان والحماية'),
+          _buildCard([
+            SwitchListTile(
+              activeThumbColor: AppTheme.primaryColor,
+              secondary: const Icon(Icons.fingerprint_rounded, color: AppTheme.primaryColor),
+              title: const Text('قفل التطبيق بالبصمة / Face ID'),
+              subtitle: const Text(
+                'طلب تأكيد الهوية عند فتح التطبيق أو العودة إليه لحماية بياناتك المالية',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _biometricEnabled,
+              onChanged: _toggleBiometric,
             ),
-            onTap: _logout,
-          ),
-        ),
-        const SizedBox(height: 24),
+          ]),
+          const SizedBox(height: 16),
 
-        // App Version Footer
-        Center(
-          child: Text(
-            'ميزان — الإصدار 1.0.0 (Yemen Wallets Aggregator)',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          // Section 3: Notifications & Alerts
+          _buildSectionHeader('الإشعارات والتنبيهات (شريط الهاتف)'),
+          if (!_systemNotificationsGranted)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.amber.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.notifications_off_rounded, color: Colors.amber.shade800),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'إشعارات الهاتف معطّلة في النظام',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'لتصلك تنبيهات العمليات في شريط الهاتف بالأعلى، يرجى السماح بالإشعارات من إعدادات الهاتف.',
+                          style: TextStyle(color: Colors.amber.shade900, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await NotificationService().openSettings();
+                      await Future.delayed(const Duration(seconds: 1));
+                      _checkPermissionStatus();
+                    },
+                    child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          _buildCard([
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.send_to_mobile_rounded, color: AppTheme.primaryColor),
+              ),
+              title: const Text(
+                'إرسال إشعار تجريبي للهاتف',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'اضغط هنا لتجربة ورؤية الإشعار ينبثق فوراً في شريط هاتفك العلوي',
+                style: TextStyle(fontSize: 12),
+              ),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: _sendTestNotification,
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              activeThumbColor: AppTheme.primaryColor,
+              secondary: const Icon(Icons.receipt_long_rounded, color: AppTheme.primaryColor),
+              title: const Text('إشعارات العمليات المالية'),
+              subtitle: const Text(
+                'تنبيه فوري في شريط الهاتف عند تسجيل أي مصروف أو إيداع يدوياً',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _manualTxNotificationsEnabled,
+              onChanged: _toggleManualTxNotifications,
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              activeThumbColor: AppTheme.primaryColor,
+              secondary: const Icon(Icons.notifications_active_outlined, color: AppTheme.primaryColor),
+              title: const Text('التذكير اليومي'),
+              subtitle: const Text(
+                'تذكير في الساعة 9:00 مساءً لتسجيل مصروفات اليوم',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _dailyReminderEnabled,
+              onChanged: _toggleDailyReminder,
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+              title: const Text('تنبيه الرصيد المنخفض'),
+              subtitle: Text(
+                'التنبيه عندما ينقص رصيد المحفظة عن ${_fmt.format(_lowBalanceThreshold)} ر.ي',
+                style: const TextStyle(fontSize: 12),
+              ),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: _editThresholdDialog,
+            ),
+          ]),
+          const SizedBox(height: 16),
+
+          // Section 4: SMS Automation (Android only)
+          if (Platform.isAndroid) ...[
+            _buildSectionHeader('أتمتة الرسائل (SMS)'),
+            _buildCard([
+              SwitchListTile(
+                activeThumbColor: AppTheme.primaryColor,
+                secondary: const Icon(Icons.mark_email_read_rounded, color: AppTheme.primaryColor),
+                title: const Text('الاستيراد التلقائي للرسائل'),
+                subtitle: const Text(
+                  'استيراد حركات المحافظ في الخلفية فور وصول الرسالة أو فتح التطبيق',
+                  style: TextStyle(fontSize: 12),
+                ),
+                value: _smsAutoImportEnabled,
+                onChanged: _toggleSmsAutoImport,
+              ),
+              const Divider(height: 1),
+              SwitchListTile(
+                activeThumbColor: AppTheme.primaryColor,
+                secondary: const Icon(Icons.notifications_active_rounded, color: AppTheme.primaryColor),
+                title: const Text('إشعارات الحركات (SMS)'),
+                subtitle: const Text(
+                  'تنبيه فوري عند وصول رسائل عمليات الإيداع أو المشتريات والخصم',
+                  style: TextStyle(fontSize: 12),
+                ),
+                value: _smsNotificationsEnabled,
+                onChanged: _toggleSmsNotifications,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryColor),
+                title: const Text('إدارة مرسلي المحافظ'),
+                subtitle: const Text(
+                  'عرض قائمة مرسلي الرسائل المدعومين',
+                  style: TextStyle(fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_left_rounded),
+                onTap: _showSmsSendersDialog,
+              ),
+            ]),
+            const SizedBox(height: 16),
+          ],
+
+          // Section 5: Logout
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.logout_rounded, color: Colors.red),
+              title: const Text(
+                'تسجيل الخروج',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+              onTap: _logout,
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-      ],
+          const SizedBox(height: 24),
+
+          // App Version Footer
+          Center(
+            child: Text(
+              'ميزان — الإصدار 1.0.0 (Yemen Wallets Aggregator)',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
     );
   }
 
