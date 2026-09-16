@@ -20,6 +20,9 @@ import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
 
 class MizaanApp extends StatelessWidget {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static bool _isBiometricGateOpen = false;
+
   final SharedPreferences prefs;
   final AuthRepository? authRepository;
   final BiometricService? biometricService;
@@ -107,11 +110,21 @@ class MizaanApp extends StatelessWidget {
             context.read<TransactionsCubit>().reset();
             context.read<StatsCubit>().reset();
             context.read<SmsCubit>().reset();
+          } else if (authState is BiometricRequired) {
+            if (!MizaanApp._isBiometricGateOpen && MizaanApp.navigatorKey.currentState != null) {
+              MizaanApp._isBiometricGateOpen = true;
+              MizaanApp.navigatorKey.currentState!
+                  .pushNamed(AppRoutes.biometricGate)
+                  .then((_) {
+                MizaanApp._isBiometricGateOpen = false;
+              });
+            }
           }
         },
         child: BlocBuilder<ThemeCubit, ThemeMode>(
           builder: (context, themeMode) {
             return MaterialApp(
+              navigatorKey: MizaanApp.navigatorKey,
               title: 'ميزان',
               debugShowCheckedModeBanner: false,
               theme: AppTheme.lightTheme,
@@ -120,7 +133,7 @@ class MizaanApp extends StatelessWidget {
               builder: (context, child) {
                 return Directionality(
                   textDirection: TextDirection.rtl,
-                  child: child ?? const SizedBox.shrink(),
+                  child: _AppLifecycleGate(child: child ?? const SizedBox.shrink()),
                 );
               },
               onGenerateRoute: (settings) => AppRoutes.onGenerateRoute(settings, prefs),
@@ -132,3 +145,52 @@ class MizaanApp extends StatelessWidget {
     );
   }
 }
+
+class _AppLifecycleGate extends StatefulWidget {
+  final Widget child;
+  const _AppLifecycleGate({required this.child});
+
+  @override
+  State<_AppLifecycleGate> createState() => _AppLifecycleGateState();
+}
+
+class _AppLifecycleGateState extends State<_AppLifecycleGate> with WidgetsBindingObserver {
+  DateTime? _pausedTime;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (BiometricService.isAuthenticating) {
+      _pausedTime = null;
+      return;
+    }
+    if (state == AppLifecycleState.paused) {
+      _pausedTime ??= DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_pausedTime != null) {
+        final elapsed = DateTime.now().difference(_pausedTime!);
+        _pausedTime = null;
+        // Lock after 10 seconds of being in the background
+        if (elapsed.inSeconds >= 10 && mounted) {
+          final authCubit = context.read<AuthCubit>();
+          authCubit.lockSession();
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+

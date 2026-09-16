@@ -192,7 +192,7 @@ void main() {
       expect(find.byType(LoginScreen), findsNothing);
     });
 
-    testWidgets('Biometric button appears on LoginScreen and triggers auth', (WidgetTester tester) async {
+    testWidgets('LoginScreen does not render ambiguous biometric button when logged out', (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues({'biometricEnabled': true});
       final prefs = await SharedPreferences.getInstance();
       final fakeAuth = FakeAuthRepository();
@@ -208,17 +208,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final bioBtn = find.text('الدخول بالبصمة');
-      expect(bioBtn, findsOneWidget);
-
-      await tester.tap(bioBtn);
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 4));
-
-      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.text('الدخول بالبصمة'), findsNothing);
+      expect(find.text('دخول تجريبي (وضع أوفلاين) 🚀'), findsOneWidget);
     });
 
-    testWidgets('BiometricGateScreen renders skip button and title', (WidgetTester tester) async {
+    testWidgets('BiometricGateScreen renders secure lock gate without bypass button', (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final fakeAuth = FakeAuthRepository();
@@ -232,11 +226,12 @@ void main() {
           homeOverride: const BiometricGateScreen(),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('ميزان مقفل للأمان'), findsOneWidget);
       expect(find.text('تأكيد البصمة'), findsOneWidget);
-      expect(find.text('تخطي البصمة ومتابعة الدخول 🚀'), findsOneWidget);
+      expect(find.text('تخطي البصمة ومتابعة الدخول 🚀'), findsNothing);
+      expect(find.text('تسجيل الخروج / تبديل الحساب'), findsOneWidget);
     });
   });
 
@@ -269,6 +264,19 @@ void main() {
       expect(result, BiometricAuthResult.notEnrolled);
       expect(cubit.isBiometricEnabled, isFalse);
       expect(cubit.state, isA<AuthInitial>());
+    });
+
+    test('lockSession emits BiometricRequired when enabled', () async {
+      SharedPreferences.setMockInitialValues({'biometricEnabled': true, 'guestLoggedIn': true});
+      final prefs = await SharedPreferences.getInstance();
+      final cubit = AuthCubit(
+        authRepository: FakeAuthRepository(),
+        biometricService: FakeBiometricService(),
+        prefs: prefs,
+      );
+
+      cubit.lockSession();
+      expect(cubit.state, isA<BiometricRequired>());
     });
   });
 }

@@ -13,7 +13,7 @@ An **Arabic (RTL) Flutter app for Android and iOS** that aggregates a user's Yem
   - **Manual entry**: the user logs transactions (expense / income) in seconds.
   - **SMS auto-import (CORE FEATURE)**: on Android, the app reads incoming wallet SMS messages, filters them by known sender IDs, extracts amounts/balances with per-wallet templates, and creates transactions automatically (`source: 'sms'`).
   - ⚠️ **Platform limitation (state it in code comments and the demo):** iOS does not allow apps to read SMS — on iOS the SMS UI is hidden and the app works fully with manual entry.
-- The app computes balances automatically, shows a unified total, spending reports, rule-based insights, low-balance alerts, a transfer-commission calculator, and balance reconciliation.
+- The app computes balances automatically, shows a unified total, spending reports, rule-based insights, low-balance alerts, and balance reconciliation.
 - **Offline-first**: everything works without internet (Hive). When online, data syncs to Firestore.
 
 ---
@@ -126,7 +126,6 @@ lib/
     sms/                       // SMS import wizard + SmsCubit (Android only)
     favorites/                 // favorites screen
     stats/                     // reports & insights + StatsCubit
-    commission/                // commission calculator
     settings/                  // settings + SettingsCubit + ThemeCubit
   data/
     models/                    // Wallet, TransactionModel (Hive adapters)
@@ -199,7 +198,6 @@ Repository pattern: write to Hive → attempt Firestore upsert → mark `synced`
 | `/sms-sync` | SMS Import Wizard (Android) | Permission → scan → preview parsed transactions → confirm import |
 | `/favorites` | Favorites | Pinned wallets with quick actions |
 | `/stats` | Reports | Pie (by category), bar (weekly/monthly), insight cards |
-| `/commission` | Commission Calculator | From-wallet, to-wallet, amount → fee + net received |
 | `/settings` | Settings | Theme, biometric, notifications, SMS senders, threshold, logout |
 
 **Bottom navigation:** الرئيسية • التقارير • المفضلة • الإعدادات
@@ -323,18 +321,17 @@ WalletSmsTemplate(
 ---
 
 ### Step 9 — Settings
-Theme selector • biometric toggle • notifications toggle • **SMS auto-import toggle + sender management** (Android) • low-balance threshold • commission calculator • logout.
+Theme selector • biometric toggle • notifications toggle • **SMS auto-import toggle + sender management** (Android) • low-balance threshold • logout.
 
 **Done when:** every setting persists and takes effect immediately.
 
 ---
 
 ### Step 10 — Creative Features
-1. **Commission calculator** (`/commission`): editable fee table (e.g. kash 1%, muhafazati 1.5%, jawali 2%) → from/to/amount → fee + net received.
-2. **Reconciliation**: "تحديث الرصيد الفعلي" on Wallet Details → enter the real balance → auto-creates an `adjustment` transaction for the difference.
-3. **Offline banner**: "وضع أوفلاين — سيتم المزامنة لاحقاً" when there is no connectivity.
+1. **Reconciliation**: "تحديث الرصيد الفعلي" on Wallet Details → enter the real balance → auto-creates an `adjustment` transaction for the difference.
+2. **Offline banner**: "وضع أوفلاين — سيتم المزامنة لاحقاً" when there is no connectivity.
 
-**Done when:** reconciliation fixes a deliberately wrong balance exactly; calculator math is correct.
+**Done when:** reconciliation fixes a deliberately wrong balance exactly.
 
 ---
 
@@ -375,7 +372,7 @@ flutter build apk --release --split-per-abi
 | Firebase | Auth + Firestore | Login works; data syncs when online |
 | Local database | Hive + shared_preferences | Full offline usage works in airplane mode |
 | State management | flutter_bloc (Cubit) | No `setState` for shared state |
-| Creative idea | Wallet aggregation + **SMS auto-import** + commission calculator + reconciliation | Demo-able live |
+| Creative idea | Wallet aggregation + **SMS auto-import** + reconciliation | Demo-able live |
 | Change name & icon | Step 11 | Launcher shows ميزان + new icon |
 | Convert to APK | Step 12 | `mizaan-release.apk` installs and runs |
 

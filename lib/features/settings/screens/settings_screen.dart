@@ -29,12 +29,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _dailyReminderEnabled = true;
   bool _smsAutoImportEnabled = true;
   bool _smsNotificationsEnabled = true;
+  bool _manualTxNotificationsEnabled = true;
+  bool _systemNotificationsGranted = true;
   double _lowBalanceThreshold = 10000.0;
 
   @override
   void initState() {
     super.initState();
     _loadPreferences();
+    _checkPermissionStatus();
+  }
+
+  Future<void> _checkPermissionStatus() async {
+    final notif = NotificationService();
+    final hasPerm = await notif.hasPermission();
+    if (mounted) {
+      setState(() => _systemNotificationsGranted = hasPerm);
+    }
   }
 
   String _userKey(String base) {
@@ -57,6 +68,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           true;
       _smsNotificationsEnabled = prefs.getBool(_userKey('smsNotificationsEnabled')) ??
           prefs.getBool('smsNotificationsEnabled') ??
+          true;
+      _manualTxNotificationsEnabled = prefs.getBool(_userKey('manualTxNotificationsEnabled')) ??
+          prefs.getBool('manualTxNotificationsEnabled') ??
           true;
       _lowBalanceThreshold = prefs.getDouble(_userKey('lowBalanceThreshold')) ??
           prefs.getDouble('lowBalanceThreshold') ??
@@ -108,7 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _biometricEnabled = value);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(value ? 'تم تفعيل الدخول بالبصمة بنجاح' : 'تم تعطيل الدخول بالبصمة'),
+          content: Text(value ? 'تم تفعيل قفل البصمة بنجاح 🛡️' : 'تم تعطيل قفل البصمة'),
           backgroundColor: AppTheme.primaryColor,
         ),
       );
@@ -146,11 +160,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _smsNotificationsEnabled = value);
     if (value) {
       final notif = NotificationService();
-      await notif.init();
       final hasPerm = await notif.hasPermission();
       if (!hasPerm) {
         await notif.requestPermission();
+        _checkPermissionStatus();
       }
+    }
+  }
+
+  Future<void> _toggleManualTxNotifications(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_userKey('manualTxNotificationsEnabled'), value);
+    await prefs.setBool('manualTxNotificationsEnabled', value);
+    setState(() => _manualTxNotificationsEnabled = value);
+    if (value) {
+      final notif = NotificationService();
+      final hasPerm = await notif.hasPermission();
+      if (!hasPerm) {
+        await notif.requestPermission();
+        _checkPermissionStatus();
+      }
+    }
+  }
+
+  Future<void> _sendTestNotification() async {
+    final notif = NotificationService();
+    final success = await notif.showTestNotification();
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('تم إرسال الإشعار! اسحب شريط إشعارات الهاتف العلوي لرؤيته.'),
+                ),
+              ],
+            ),
+            backgroundColor: AppTheme.primaryColor,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('إشعارات التطبيق معطلة في إعدادات الهاتف.'),
+                ),
+              ],
+            ),
+            action: SnackBarAction(
+              label: 'فتح الإعدادات',
+              textColor: Colors.amber,
+              onPressed: () => notif.openSettings(),
+            ),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      _checkPermissionStatus();
     }
   }
 
@@ -420,9 +495,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             activeThumbColor: AppTheme.primaryColor,
             secondary: const Icon(Icons.fingerprint_rounded, color: AppTheme.primaryColor),
-            title: const Text('الدخول بالبصمة'),
+            title: const Text('قفل التطبيق بالبصمة / Face ID'),
             subtitle: const Text(
-              'طلب البصمة عند فتح التطبيق لحماية خصوصيتك',
+              'طلب تأكيد الهوية عند فتح التطبيق أو العودة إليه لحماية بياناتك المالية',
               style: TextStyle(fontSize: 12),
             ),
             value: _biometricEnabled,
@@ -432,8 +507,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 16),
 
         // Section 3: Notifications & Alerts
-        _buildSectionHeader('الإشعارات والتنبيهات'),
+        _buildSectionHeader('الإشعارات والتنبيهات (شريط الهاتف)'),
+        if (!_systemNotificationsGranted)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.amber.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.notifications_off_rounded, color: Colors.amber.shade800),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'إشعارات الهاتف معطّلة في النظام',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber.shade900,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'لتصلك تنبيهات العمليات في شريط الهاتف بالأعلى، يرجى السماح بالإشعارات من إعدادات الهاتف.',
+                        style: TextStyle(color: Colors.amber.shade900, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await NotificationService().openSettings();
+                    await Future.delayed(const Duration(seconds: 1));
+                    _checkPermissionStatus();
+                  },
+                  child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
         _buildCard([
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withAlpha(25),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.send_to_mobile_rounded, color: AppTheme.primaryColor),
+            ),
+            title: const Text(
+              'إرسال إشعار تجريبي للهاتف',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text(
+              'اضغط هنا لتجربة ورؤية الإشعار ينبثق فوراً في شريط هاتفك العلوي',
+              style: TextStyle(fontSize: 12),
+            ),
+            trailing: const Icon(Icons.chevron_left_rounded),
+            onTap: _sendTestNotification,
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            activeThumbColor: AppTheme.primaryColor,
+            secondary: const Icon(Icons.receipt_long_rounded, color: AppTheme.primaryColor),
+            title: const Text('إشعارات العمليات المالية'),
+            subtitle: const Text(
+              'تنبيه فوري في شريط الهاتف عند تسجيل أي مصروف أو إيداع يدوياً',
+              style: TextStyle(fontSize: 12),
+            ),
+            value: _manualTxNotificationsEnabled,
+            onChanged: _toggleManualTxNotifications,
+          ),
+          const Divider(height: 1),
           SwitchListTile(
             activeThumbColor: AppTheme.primaryColor,
             secondary: const Icon(Icons.notifications_active_outlined, color: AppTheme.primaryColor),
@@ -501,23 +653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
         ],
 
-        // Section 5: Tools
-        _buildSectionHeader('الأدوات المساعدة'),
-        _buildCard([
-          ListTile(
-            leading: const Icon(Icons.calculate_outlined, color: AppTheme.primaryColor),
-            title: const Text('حاسبة عمولات المحافظ'),
-            subtitle: const Text(
-              'حساب عمولات ورسوم التحويل والسحب بين المحافظ اليمنية',
-              style: TextStyle(fontSize: 12),
-            ),
-            trailing: const Icon(Icons.chevron_left_rounded),
-            onTap: () => Navigator.pushNamed(context, AppRoutes.commission),
-          ),
-        ]),
-        const SizedBox(height: 20),
-
-        // Section 6: Logout
+        // Section 5: Logout
         Container(
           decoration: BoxDecoration(
             color: Colors.red.shade50,

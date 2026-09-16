@@ -1,8 +1,12 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
 class ParsedSmsData {
   final String walletType;
-  final String type; // 'income' | 'expense'
+  final String type; // 'income' | 'expense' | 'adjustment'
   final double amount;
   final double? balance;
+  final bool isBalanceOnly;
   final String category;
   final DateTime date;
   final String rawSender;
@@ -14,6 +18,7 @@ class ParsedSmsData {
     required this.type,
     required this.amount,
     this.balance,
+    this.isBalanceOnly = false,
     required this.category,
     required this.date,
     required this.rawSender,
@@ -29,6 +34,9 @@ class WalletSmsTemplate {
   final List<RegExp> incomePatterns;
   final List<RegExp> expensePatterns;
   final List<RegExp> balancePatterns;
+  final List<String>? incomePatternStrings;
+  final List<String>? expensePatternStrings;
+  final List<String>? balancePatternStrings;
 
   const WalletSmsTemplate({
     required this.walletType,
@@ -37,10 +45,127 @@ class WalletSmsTemplate {
     required this.incomePatterns,
     required this.expensePatterns,
     required this.balancePatterns,
+    this.incomePatternStrings,
+    this.expensePatternStrings,
+    this.balancePatternStrings,
   });
+
+  /// Factory constructor to build a template from raw regex strings (e.g. from JSON / DB / User Input)
+  factory WalletSmsTemplate.fromStrings({
+    required String walletType,
+    required String walletNameAr,
+    required List<String> senderIds,
+    required List<String> incomePatterns,
+    required List<String> expensePatterns,
+    required List<String> balancePatterns,
+  }) {
+    return WalletSmsTemplate(
+      walletType: walletType,
+      walletNameAr: walletNameAr,
+      senderIds: senderIds,
+      incomePatterns: incomePatterns.map((p) => RegExp(p, caseSensitive: false, dotAll: true)).toList(),
+      expensePatterns: expensePatterns.map((p) => RegExp(p, caseSensitive: false, dotAll: true)).toList(),
+      balancePatterns: balancePatterns.map((p) => RegExp(p, caseSensitive: false)).toList(),
+      incomePatternStrings: incomePatterns,
+      expensePatternStrings: expensePatterns,
+      balancePatternStrings: balancePatterns,
+    );
+  }
+
+  /// Serialize to JSON Map for saving to Hive or SharedPreferences or Cloud
+  Map<String, dynamic> toJson() {
+    return {
+      'walletType': walletType,
+      'walletNameAr': walletNameAr,
+      'senderIds': senderIds,
+      'incomePatterns': incomePatternStrings ?? incomePatterns.map((r) => r.pattern).toList(),
+      'expensePatterns': expensePatternStrings ?? expensePatterns.map((r) => r.pattern).toList(),
+      'balancePatterns': balancePatternStrings ?? balancePatterns.map((r) => r.pattern).toList(),
+    };
+  }
+
+  /// Deserialize from JSON Map
+  factory WalletSmsTemplate.fromJson(Map<String, dynamic> json) {
+    return WalletSmsTemplate.fromStrings(
+      walletType: json['walletType'] as String? ?? 'custom',
+      walletNameAr: json['walletNameAr'] as String? ?? 'محفظة مخصصة',
+      senderIds: List<String>.from(json['senderIds'] ?? []),
+      incomePatterns: List<String>.from(json['incomePatterns'] ?? []),
+      expensePatterns: List<String>.from(json['expensePatterns'] ?? []),
+      balancePatterns: List<String>.from(json['balancePatterns'] ?? []),
+    );
+  }
 }
 
 class SmsSenderRegistry {
+  /// Dynamic user-registered or cloud-synced templates
+  static final List<WalletSmsTemplate> _customTemplates = [];
+  static const String _customTemplatesKey = 'mizaan_custom_sms_templates_v1';
+
+  /// Register a single custom template (e.g. user added their own bank)
+  static void registerCustomTemplate(WalletSmsTemplate template, {bool persist = false}) {
+    _customTemplates.removeWhere((t) => t.walletType == template.walletType);
+    _customTemplates.insert(0, template);
+    if (persist) {
+      saveCustomTemplates();
+    }
+  }
+
+  /// Register multiple custom templates (e.g. on app startup from local storage)
+  static void registerCustomTemplates(List<WalletSmsTemplate> templates, {bool persist = false}) {
+    for (final t in templates) {
+      registerCustomTemplate(t, persist: false);
+    }
+    if (persist) {
+      saveCustomTemplates();
+    }
+  }
+
+  /// Remove a custom template by walletType
+  static void removeCustomTemplate(String walletType, {bool persist = false}) {
+    _customTemplates.removeWhere((t) => t.walletType == walletType);
+    if (persist) {
+      saveCustomTemplates();
+    }
+  }
+
+  /// Clear all custom templates
+  static void clearCustomTemplates({bool persist = false}) {
+    _customTemplates.clear();
+    if (persist) {
+      saveCustomTemplates();
+    }
+  }
+
+  /// Get all active templates (custom templates take priority, followed by defaults)
+  static List<WalletSmsTemplate> getAllTemplates() {
+    return [..._customTemplates, ...defaultTemplates];
+  }
+
+  /// Load custom templates saved in local SharedPreferences
+  static Future<void> loadCustomTemplates() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(_customTemplatesKey);
+      if (list != null && list.isNotEmpty) {
+        final parsed = list.map((raw) {
+          final map = jsonDecode(raw) as Map<String, dynamic>;
+          return WalletSmsTemplate.fromJson(map);
+        }).toList();
+        registerCustomTemplates(parsed, persist: false);
+      }
+    } catch (_) {}
+  }
+
+  /// Save custom templates to local SharedPreferences
+  static Future<void> saveCustomTemplates() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _customTemplates.map((t) => jsonEncode(t.toJson())).toList();
+      await prefs.setStringList(_customTemplatesKey, list);
+    } catch (_) {}
+  }
+
   static final List<WalletSmsTemplate> defaultTemplates = [
     // 1. Kuraimi Bank (الكريمي)
     // Real SMS samples:
@@ -66,9 +191,9 @@ class SmsSenderRegistry {
       ],
       balancePatterns: [
         RegExp(r'رصيدك\s*(?:هو\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
-        RegExp(r'(?:YER\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|ر\.?ي)\s*رصيدك', caseSensitive: false),
-        RegExp(r'([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|ر\.?ي)?\s*رصيدك', caseSensitive: false),
+        RegExp(r'(?:YER\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|ر\.?ي)+\s*رصيدك', caseSensitive: false),
         RegExp(r'YER\s*([0-9,]+(?:\.[0-9]+)?)\s*رصيدك', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
     ),
 
@@ -92,7 +217,8 @@ class SmsSenderRegistry {
       ],
       balancePatterns: [
         RegExp(r'رص:\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:ر\.?ي|YER)?', caseSensitive: false),
-        RegExp(r'رصيدك[:\s]*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيدك[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
     ),
 
@@ -109,6 +235,8 @@ class SmsSenderRegistry {
       ],
       balancePatterns: [
         RegExp(r'رصيدك[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'(?:الرصيد|رصيدك)\s*(?:الحالي\s*)?[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
     ),
 
@@ -125,6 +253,8 @@ class SmsSenderRegistry {
       ],
       balancePatterns: [
         RegExp(r'رصيدك[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'(?:الرصيد|رصيدك)\s*(?:الحالي\s*)?[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
     ),
 
@@ -141,6 +271,8 @@ class SmsSenderRegistry {
       ],
       balancePatterns: [
         RegExp(r'رصيدك[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'(?:الرصيد|رصيدك)\s*(?:الحالي\s*)?[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
     ),
   ];
@@ -169,20 +301,21 @@ class SmsSenderRegistry {
   /// Find matching template for a given SMS sender address
   static WalletSmsTemplate? findTemplate(String sender, [Map<String, String>? customMappings]) {
     final cleanSender = sender.trim().toLowerCase();
+    final all = getAllTemplates();
 
     // Check custom mappings first (e.g. user mapped a number/contact to wallet type)
     if (customMappings != null) {
       for (final entry in customMappings.entries) {
         if (cleanSender == entry.key.trim().toLowerCase()) {
-          return defaultTemplates.firstWhere(
+          return all.firstWhere(
             (t) => t.walletType == entry.value,
-            orElse: () => defaultTemplates.first,
+            orElse: () => all.first,
           );
         }
       }
     }
 
-    for (final template in defaultTemplates) {
+    for (final template in all) {
       for (final id in template.senderIds) {
         if (cleanSender.contains(id.toLowerCase()) || id.toLowerCase().contains(cleanSender)) {
           return template;
@@ -270,12 +403,35 @@ class SmsSenderRegistry {
 
     final normalized = normalizeDigits(body);
 
+    // Pass 1: Extract balance and isolate its match range
+    double? balance;
+    String textWithoutBalance = normalized;
+
+    for (final pattern in template.balancePatterns) {
+      final match = pattern.firstMatch(normalized);
+      if (match != null) {
+        for (int g = 1; g <= match.groupCount; g++) {
+          final rawBal = match.group(g);
+          if (rawBal != null) {
+            final parsedBal = parseAmount(rawBal);
+            if (parsedBal != null) {
+              balance = parsedBal;
+              // Mask the entire balance clause so Pass 2 cannot accidentally capture it
+              textWithoutBalance = normalized.replaceRange(match.start, match.end, ' ');
+              break;
+            }
+          }
+        }
+      }
+      if (balance != null) break;
+    }
+
     double? amount;
     String? type;
 
-    // Check income first
+    // Pass 2: Extract operation amount from text excluding the balance clause
     for (final pattern in template.incomePatterns) {
-      final match = pattern.firstMatch(normalized);
+      final match = pattern.firstMatch(textWithoutBalance);
       if (match != null && match.groupCount >= 1) {
         final rawAmount = match.group(1);
         if (rawAmount != null) {
@@ -292,7 +448,7 @@ class SmsSenderRegistry {
     // Check expense if not income
     if (type == null) {
       for (final pattern in template.expensePatterns) {
-        final match = pattern.firstMatch(normalized);
+        final match = pattern.firstMatch(textWithoutBalance);
         if (match != null && match.groupCount >= 1) {
           final rawAmount = match.group(1);
           if (rawAmount != null) {
@@ -307,27 +463,23 @@ class SmsSenderRegistry {
       }
     }
 
+    // Disambiguation: Pure balance inquiry / statement notification
     if (amount == null || type == null) {
-      return null;
-    }
-
-    // Extract balance if present
-    double? balance;
-    for (final pattern in template.balancePatterns) {
-      final match = pattern.firstMatch(normalized);
-      if (match != null) {
-        for (int g = 1; g <= match.groupCount; g++) {
-          final rawBal = match.group(g);
-          if (rawBal != null) {
-            final parsedBal = parseAmount(rawBal);
-            if (parsedBal != null) {
-              balance = parsedBal;
-              break;
-            }
-          }
-        }
+      if (balance != null) {
+        return ParsedSmsData(
+          walletType: template.walletType,
+          type: 'adjustment',
+          amount: 0.0,
+          balance: balance,
+          isBalanceOnly: true,
+          category: 'أخرى',
+          date: date,
+          rawSender: sender,
+          rawBody: body,
+          smsKey: generateSmsKey(sender, date, body),
+        );
       }
-      if (balance != null) break;
+      return null;
     }
 
     final category = guessCategory(body);
@@ -338,6 +490,7 @@ class SmsSenderRegistry {
       type: type,
       amount: amount,
       balance: balance,
+      isBalanceOnly: false,
       category: category,
       date: date,
       rawSender: sender,

@@ -12,6 +12,7 @@ enum BiometricAuthResult {
 }
 
 class BiometricService {
+  static bool isAuthenticating = false;
   final LocalAuthentication _auth;
 
   BiometricService({LocalAuthentication? auth})
@@ -48,6 +49,7 @@ class BiometricService {
   Future<BiometricAuthResult> authenticateWithDetails({
     String localizedReason = 'يرجى تأكيد هويتك بالبصمة للمتابعة',
   }) async {
+    isAuthenticating = true;
     try {
       final authenticated = await _auth.authenticate(
         localizedReason: localizedReason,
@@ -72,6 +74,8 @@ class BiometricService {
     } catch (e) {
       debugPrint('Biometric unexpected error: $e');
       return BiometricAuthResult.error;
+    } finally {
+      isAuthenticating = false;
     }
   }
 }

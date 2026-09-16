@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/features/auth/screens/login_screen.dart';
 import 'package:mizaan/features/auth/screens/register_screen.dart';
-import 'package:mizaan/features/commission/screens/commission_screen.dart';
 import 'package:mizaan/features/favorites/screens/favorites_screen.dart';
 import 'package:mizaan/features/home/screens/home_screen.dart';
 import 'package:mizaan/features/onboarding/screens/intro_screen.dart';
@@ -13,6 +12,7 @@ import 'package:mizaan/features/sms/screens/sms_sync_screen.dart';
 import 'package:mizaan/features/stats/screens/stats_screen.dart';
 import 'package:mizaan/features/wallets/screens/add_wallet_screen.dart';
 import 'package:mizaan/features/transactions/screens/transactions_history_screen.dart';
+import 'package:mizaan/features/auth/screens/biometric_gate_screen.dart';
 import 'package:mizaan/features/wallets/screens/wallet_details_screen.dart';
 
 class AppRoutes {
@@ -20,13 +20,13 @@ class AppRoutes {
   static const String intro = '/intro';
   static const String login = '/login';
   static const String register = '/register';
+  static const String biometricGate = '/biometric-gate';
   static const String home = '/home';
   static const String addWallet = '/add-wallet';
   static const String addTransaction = '/add-transaction';
   static const String transactions = '/transactions';
   static const String favorites = '/favorites';
   static const String stats = '/stats';
-  static const String commission = '/commission';
   static const String settings = '/settings';
   static const String smsSync = '/sms-sync';
 
@@ -59,6 +59,11 @@ class AppRoutes {
       case register:
         return MaterialPageRoute(
           builder: (_) => const RegisterScreen(),
+          settings: routeSettings,
+        );
+      case biometricGate:
+        return MaterialPageRoute(
+          builder: (_) => const BiometricGateScreen(),
           settings: routeSettings,
         );
       case home:
@@ -96,11 +101,6 @@ class AppRoutes {
       case smsSync:
         return MaterialPageRoute(
           builder: (_) => const SmsSyncScreen(),
-          settings: routeSettings,
-        );
-      case commission:
-        return MaterialPageRoute(
-          builder: (_) => const CommissionScreen(),
           settings: routeSettings,
         );
       case AppRoutes.settings:

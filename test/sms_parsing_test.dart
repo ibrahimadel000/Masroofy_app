@@ -93,7 +93,45 @@ void main() {
       expect(parsed.type, 'income');
       expect(parsed.amount, 100.0);
       expect(parsed.balance, 4045.3);
+      expect(parsed.isBalanceOnly, isFalse);
       expect(parsed.category, 'تحويل');
+    });
+
+    test('Kuraimi Bank real SMS 5b (User Case) — Deposit 500 with Balance 4045.3', () {
+      const sender = 'Kuraimi';
+      const body = 'أودع/ابراهيم عادل عبدالواحد الشرجبي\nلحسابك مبلغ 500 رصيدك YER 4045.3';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 500.0); // Specifically verify amount is 500, NOT 4045!
+      expect(parsed.balance, 4045.3);
+      expect(parsed.isBalanceOnly, isFalse);
+      expect(parsed.category, 'تحويل');
+    });
+
+    test('Kuraimi Bank Pure Balance Inquiry — Reconcile without fake income', () {
+      const sender = 'Kuraimi';
+      const body = 'رصيد حسابك في بنك الكريمي هو 3000 YER';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'adjustment');
+      expect(parsed.amount, 0.0);
+      expect(parsed.balance, 3000.0);
+      expect(parsed.isBalanceOnly, isTrue);
     });
 
     test('Kuraimi Bank real SMS 6 — Mobile Bill payment (Expense 200.00)', () {
@@ -219,6 +257,60 @@ void main() {
       final morningTime = DateTime(2026, 9, 15, 9, 15); // 09:15 AM
       final formattedTime = AppConstants.formatTime(morningTime);
       expect(formattedTime.contains('09:15') || formattedTime.contains('9:15') || formattedTime.contains('٠٩:١٥'), isTrue);
+    });
+
+    test('Jaib Wallet Pure Balance Inquiry — Reconcile without fake income', () {
+      const sender = 'Jaib';
+      const body = 'رصيدك: 5680 YER';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'jeeb');
+      expect(parsed.type, 'adjustment');
+      expect(parsed.amount, 0.0);
+      expect(parsed.balance, 5680.0);
+      expect(parsed.isBalanceOnly, isTrue);
+    });
+
+    test('Kash Wallet Deposit with Balance Disambiguation', () {
+      const sender = 'Kash';
+      const body = 'إيداع 1000 رصيدك YER 4000';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kash');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 1000.0);
+      expect(parsed.balance, 4000.0);
+      expect(parsed.isBalanceOnly, isFalse);
+    });
+
+    test('Jawali Wallet Deduction with Balance Disambiguation', () {
+      const sender = 'Jawali';
+      const body = 'خصم 300 رصيدك: 2700';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'jawali');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 300.0);
+      expect(parsed.balance, 2700.0);
+      expect(parsed.isBalanceOnly, isFalse);
     });
   });
 }

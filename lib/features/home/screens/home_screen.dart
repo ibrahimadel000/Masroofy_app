@@ -104,21 +104,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _checkNotificationPermissionOnce() async {
+    final notif = NotificationService();
+    await notif.init();
     final prefs = await SharedPreferences.getInstance();
-    final requested = prefs.getBool('notificationPermissionRequested') ?? false;
-    if (!requested) {
-      await prefs.setBool('notificationPermissionRequested', true);
-      final notif = NotificationService();
-      await notif.init();
-      final granted = await notif.requestPermission();
-      if (granted) {
-        final uid = DatabaseService.currentUserId ?? 'guest';
-        final reminder = prefs.getBool('${uid}_dailyReminderEnabled') ??
-            prefs.getBool('dailyReminderEnabled') ??
-            true;
-        if (reminder) {
-          await notif.scheduleDailyReminder();
+    final hasPerm = await notif.hasPermission();
+    if (!hasPerm) {
+      final requestedBefore = prefs.getBool('notificationPermissionRequested') ?? false;
+      if (!requestedBefore) {
+        await prefs.setBool('notificationPermissionRequested', true);
+        final granted = await notif.requestPermission();
+        if (granted) {
+          final uid = DatabaseService.currentUserId ?? 'guest';
+          final reminder = prefs.getBool('${uid}_dailyReminderEnabled') ??
+              prefs.getBool('dailyReminderEnabled') ??
+              true;
+          if (reminder) {
+            await notif.scheduleDailyReminder();
+          }
         }
+      }
+    } else {
+      // Permission already granted / enabled (e.g. Android < 13 or user previously allowed)
+      final uid = DatabaseService.currentUserId ?? 'guest';
+      final reminder = prefs.getBool('${uid}_dailyReminderEnabled') ??
+          prefs.getBool('dailyReminderEnabled') ??
+          true;
+      if (reminder) {
+        await notif.scheduleDailyReminder();
       }
     }
   }

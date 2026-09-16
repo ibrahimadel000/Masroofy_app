@@ -93,9 +93,47 @@ class TransactionsCubit extends Cubit<TransactionsState> {
       await repository.saveTransaction(tx);
       loadTransactions();
       _checkLowBalanceAlert(tx);
+      if (source == 'manual') {
+        _notifyManualTransaction(tx);
+      }
     } catch (e) {
       emit(TransactionsError('فشل تسجيل الحركة: $e'));
     }
+  }
+
+  Future<void> _notifyManualTransaction(TransactionModel tx) async {
+    try {
+      final sp = prefs ?? await SharedPreferences.getInstance();
+      final uid = DatabaseService.currentUserId ?? 'guest';
+      final notifyManual = sp.getBool('${uid}_manualTxNotificationsEnabled') ??
+          sp.getBool('manualTxNotificationsEnabled') ??
+          true;
+
+      if (!notifyManual) return;
+
+      final wRepo = walletRepository ?? WalletRepository();
+      final wallet = wRepo.getWalletById(tx.walletId);
+      final walletName = wallet?.name ?? 'المحفظة';
+      final currencyCode = wallet?.currencyCode ?? 'YER';
+
+      double? currentBal;
+      if (wallet != null) {
+        final txs = repository.getTransactionsByWallet(wallet.id);
+        currentBal = BalanceCalculator.calculateWalletBalance(
+          openingBalance: wallet.openingBalance,
+          transactions: txs,
+        );
+      }
+
+      final notif = notificationService ?? NotificationService();
+      await notif.showManualTransactionNotification(
+        walletName: walletName,
+        type: tx.type,
+        amount: tx.amount,
+        currencyCode: currencyCode,
+        currentBalance: currentBal,
+      );
+    } catch (_) {}
   }
 
   Future<void> _checkLowBalanceAlert(TransactionModel tx) async {

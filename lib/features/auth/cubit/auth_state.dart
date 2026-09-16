@@ -27,11 +27,12 @@ class Authenticated extends AuthState {
 
 class BiometricRequired extends AuthState {
   final User? user;
+  final bool isGuest;
 
-  const BiometricRequired(this.user);
+  const BiometricRequired(this.user, {this.isGuest = false});
 
   @override
-  List<Object?> get props => [user?.uid];
+  List<Object?> get props => [user?.uid, isGuest];
 }
 
 class AuthError extends AuthState {

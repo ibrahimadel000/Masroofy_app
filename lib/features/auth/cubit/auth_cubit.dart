@@ -30,12 +30,30 @@ class AuthCubit extends Cubit<AuthState> {
     return keyBiometricEnabled;
   }
 
-  bool get isBiometricEnabled =>
-      prefs.getBool(_biometricKey) ?? prefs.getBool(keyBiometricEnabled) ?? false;
+  bool get isBiometricEnabled {
+    final uid = authRepository.currentUser?.uid;
+    if (uid != null) {
+      return prefs.getBool('${uid}_$keyBiometricEnabled') ??
+          prefs.getBool(keyBiometricEnabled) ??
+          false;
+    }
+    if (isGuestLoggedIn) {
+      return prefs.getBool('guest_$keyBiometricEnabled') ??
+          prefs.getBool(keyBiometricEnabled) ??
+          false;
+    }
+    return false;
+  }
+
   bool get isGuestLoggedIn => prefs.getBool(keyGuestLoggedIn) ?? false;
 
   Future<void> setBiometricEnabled(bool enabled) async {
-    await prefs.setBool(_biometricKey, enabled);
+    final uid = authRepository.currentUser?.uid;
+    if (uid != null) {
+      await prefs.setBool('${uid}_$keyBiometricEnabled', enabled);
+    } else if (isGuestLoggedIn) {
+      await prefs.setBool('guest_$keyBiometricEnabled', enabled);
+    }
     await prefs.setBool(keyBiometricEnabled, enabled);
   }
 
@@ -44,14 +62,14 @@ class AuthCubit extends Cubit<AuthState> {
     if (user != null) {
       await DatabaseService.switchUser(user.uid);
       if (isBiometricEnabled) {
-        emit(BiometricRequired(user));
+        emit(BiometricRequired(user, isGuest: false));
       } else {
         emit(Authenticated(user));
       }
     } else if (isGuestLoggedIn) {
       await DatabaseService.switchUser('guest');
       if (isBiometricEnabled) {
-        emit(const BiometricRequired(null));
+        emit(const BiometricRequired(null, isGuest: true));
       } else {
         emit(const Authenticated(null, isGuest: true));
       }
@@ -110,18 +128,38 @@ class AuthCubit extends Cubit<AuthState> {
     emit(const Authenticated(null, isGuest: true));
   }
 
+  void lockSession() {
+    if (!isBiometricEnabled || state is BiometricRequired) return;
+
+    final user = authRepository.currentUser;
+    final guest = isGuestLoggedIn;
+
+    if (user != null) {
+      emit(BiometricRequired(user, isGuest: false));
+    } else if (guest) {
+      emit(const BiometricRequired(null, isGuest: true));
+    }
+  }
+
   Future<BiometricAuthResult> authenticateWithBiometrics() async {
     final result = await biometricService.authenticateWithDetails(
       localizedReason: 'يرجى تأكيد بصمتك لفتح تطبيق ميزان',
     );
 
     if (result == BiometricAuthResult.success) {
-      await setBiometricEnabled(true);
       final user = authRepository.currentUser;
-      if (user == null) {
+      final guest = isGuestLoggedIn;
+      if (user != null) {
+        await DatabaseService.switchUser(user.uid);
+        emit(Authenticated(user, isGuest: false));
+      } else if (guest) {
+        await DatabaseService.switchUser('guest');
+        emit(const Authenticated(null, isGuest: true));
+      } else {
         await prefs.setBool(keyGuestLoggedIn, true);
+        await setBiometricEnabled(true);
+        emit(const Authenticated(null, isGuest: true));
       }
-      emit(Authenticated(user, isGuest: user == null));
     }
 
     return result;

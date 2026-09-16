@@ -65,29 +65,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _loginWithBiometrics() async {
-    final result = await context.read<AuthCubit>().authenticateWithBiometrics();
-    if (!mounted) return;
-    if (result == BiometricAuthResult.success) {
-      // Authenticated state listener handles navigation
-    } else {
-      String msg = 'فشلت المصادقة بالبصمة';
-      if (result == BiometricAuthResult.notEnrolled) {
-        msg = 'لم يتم تسجيل بصمة في هذا الجهاز أو المحاكي. يرجى إعداد بصمة أولاً في إعدادات النظام أو استخدام الدخول التجريبي.';
-      } else if (result == BiometricAuthResult.notAvailable) {
-        msg = 'المصادقة بالبصمة غير مدعومة على هذا الجهاز.';
-      } else if (result == BiometricAuthResult.lockedOut) {
-        msg = 'تم قفل محاولات البصمة مؤقتاً لكثرة المحاولات الخاطئة.';
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: Colors.red.shade700,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
-  }
 
   Future<void> _showBiometricPromptDialog() async {
     final cubit = context.read<AuthCubit>();
@@ -218,7 +195,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
           } else if (state is Authenticated) {
-            await _showBiometricPromptDialog();
+            final cubit = context.read<AuthCubit>();
+            if (!state.isGuest && _canUseBiometrics && !cubit.isBiometricEnabled) {
+              await _showBiometricPromptDialog();
+            }
             if (context.mounted) {
               Navigator.pushNamedAndRemoveUntil(
                 context,
@@ -230,8 +210,6 @@ class _LoginScreenState extends State<LoginScreen> {
         },
         builder: (context, state) {
           final isLoading = state is Authenticating;
-          final cubit = context.read<AuthCubit>();
-          final showFingerprintButton = _canUseBiometrics || cubit.isBiometricEnabled;
 
           return SafeArea(
             child: Center(
@@ -369,28 +347,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       ),
 
-                      // Biometric Login Button (if enabled or supported)
-                      if (showFingerprintButton) ...[
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: isLoading ? null : _loginWithBiometrics,
-                          icon: const Icon(Icons.fingerprint, color: AppTheme.primaryColor),
-                          label: const Text(
-                            'الدخول بالبصمة',
-                            style: TextStyle(
-                              color: AppTheme.primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 13),
-                            side: const BorderSide(color: AppTheme.primaryColor, width: 1.5),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                      ],
 
                       const SizedBox(height: 28),
 

@@ -341,15 +341,21 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: isExpense
-                                  ? Colors.red.withValues(alpha: 0.12)
-                                  : Colors.green.withValues(alpha: 0.12),
+                              color: item.data.isBalanceOnly
+                                  ? Colors.blue.withValues(alpha: 0.12)
+                                  : (isExpense
+                                      ? Colors.red.withValues(alpha: 0.12)
+                                      : Colors.green.withValues(alpha: 0.12)),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              isExpense ? 'خصم / سداد' : 'إيداع / استلام',
+                              item.data.isBalanceOnly
+                                  ? 'تحديث رصيد (تسوية)'
+                                  : (isExpense ? 'خصم / سداد' : 'إيداع / استلام'),
                               style: TextStyle(
-                                color: isExpense ? Colors.red.shade800 : Colors.green.shade800,
+                                color: item.data.isBalanceOnly
+                                    ? Colors.blue.shade800
+                                    : (isExpense ? Colors.red.shade800 : Colors.green.shade800),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
@@ -367,13 +373,27 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                             padding: EdgeInsets.zero,
                           ),
                           const Spacer(),
-                          Text(
-                            AppConstants.formatCurrency(item.data.amount),
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                              color: isExpense ? Colors.red.shade700 : Colors.green.shade700,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                item.data.isBalanceOnly
+                                    ? AppConstants.formatCurrency(item.data.balance ?? 0.0)
+                                    : AppConstants.formatCurrency(item.data.amount),
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: item.data.isBalanceOnly
+                                      ? AppTheme.primaryColor
+                                      : (isExpense ? Colors.red.shade700 : Colors.green.shade700),
+                                ),
+                              ),
+                              if (!item.data.isBalanceOnly && item.data.balance != null)
+                                Text(
+                                  'الرصيد: ${AppConstants.formatCurrency(item.data.balance!)}',
+                                  style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                                ),
+                            ],
                           ),
                         ],
                       ),

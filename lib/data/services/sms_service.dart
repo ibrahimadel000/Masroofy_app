@@ -4,6 +4,7 @@ import 'package:telephony/telephony.dart';
 import 'package:uuid/uuid.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/constants/sms_senders.dart';
+import 'package:mizaan/core/utils/balance_calculator.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/data/repositories/transaction_repository.dart';
@@ -60,6 +61,48 @@ class SmsService {
     }
   }
 
+  /// Universal smart wallet matching
+  /// Matches wallet by: ID -> Type -> Name contains -> Sender ID in name -> Favorite wallet -> First wallet
+  static Wallet? findMatchingWallet({
+    required List<Wallet> userWallets,
+    required String walletType,
+    WalletSmsTemplate? template,
+  }) {
+    if (userWallets.isEmpty) return null;
+
+    final cleanType = walletType.toLowerCase().trim();
+
+    // 1. Exact match on wallet ID
+    final byId = userWallets.where((w) => w.id == walletType).toList();
+    if (byId.isNotEmpty) return byId.first;
+
+    // 2. Exact match on wallet type
+    final byType = userWallets.where((w) => w.type.toLowerCase().trim() == cleanType).toList();
+    if (byType.isNotEmpty) return byType.first;
+
+    // 3. Match wallet name with walletType or template details
+    final byName = userWallets.where((w) {
+      final name = w.name.toLowerCase().trim();
+      if (name.contains(cleanType) || cleanType.contains(name)) return true;
+      if (template != null) {
+        final tmplName = template.walletNameAr.toLowerCase().trim();
+        if (name.contains(tmplName) || tmplName.contains(name)) return true;
+        for (final id in template.senderIds) {
+          if (name.contains(id.toLowerCase()) || id.toLowerCase().contains(name)) return true;
+        }
+      }
+      return false;
+    }).toList();
+    if (byName.isNotEmpty) return byName.first;
+
+    // 4. Fallback to favorite wallet
+    final favorites = userWallets.where((w) => w.isFavorite).toList();
+    if (favorites.isNotEmpty) return favorites.first;
+
+    // 5. Fallback to first wallet
+    return userWallets.first;
+  }
+
   /// Scan inbox, filter by registered wallet senders only, dedupe, and return candidates
   Future<List<SmsCandidateItem>> scanRecentWalletSms({
     int maxCount = 100,
@@ -110,15 +153,13 @@ class SmsService {
           continue;
         }
 
-        // 4. Auto-match with user's wallets by type
-        String? matchedWalletId;
-        final matchingWallets = userWallets.where((w) => w.type == parsed.walletType).toList();
-        if (matchingWallets.isNotEmpty) {
-          matchedWalletId = matchingWallets.first.id;
-        } else if (userWallets.isNotEmpty) {
-          // Fallback to first wallet if no exact type match
-          matchedWalletId = userWallets.first.id;
-        }
+        // 4. Auto-match with user's wallets dynamically
+        final matchedWallet = findMatchingWallet(
+          userWallets: userWallets,
+          walletType: parsed.walletType,
+          template: template,
+        );
+        final matchedWalletId = matchedWallet?.id;
 
         results.add(
           SmsCandidateItem(
@@ -141,6 +182,7 @@ class SmsService {
     required TransactionRepository transactionRepository,
     required List<Wallet> userWallets,
     required NotificationService notificationService,
+    WalletRepository? walletRepository,
     Map<String, String>? customMappings,
     bool showNotification = true,
   }) async {
@@ -167,36 +209,72 @@ class SmsService {
       if (transactionRepository.hasSmsKey(parsed.smsKey)) return null;
       if (userWallets.isEmpty) return null;
 
-      String? matchedWalletId;
-      String walletName = template.walletNameAr;
-      String currencyCode = 'YER';
-      final matchingWallets = userWallets.where((w) => w.type == parsed.walletType).toList();
-      if (matchingWallets.isNotEmpty) {
-        matchedWalletId = matchingWallets.first.id;
-        walletName = matchingWallets.first.name;
-        currencyCode = matchingWallets.first.currencyCode;
-      } else {
-        matchedWalletId = userWallets.first.id;
-        walletName = userWallets.first.name;
-        currencyCode = userWallets.first.currencyCode;
-      }
-
-      final tx = TransactionModel(
-        id: const Uuid().v4(),
-        walletId: matchedWalletId,
-        type: parsed.type,
-        amount: parsed.amount,
-        category: parsed.category,
-        note: parsed.rawBody,
-        date: parsed.date,
-        source: 'sms',
-        smsKey: parsed.smsKey,
-        createdAt: DateTime.now(),
-        rawSmsBody: parsed.rawBody,
-        rawSmsSender: parsed.rawSender,
+      final matchedWallet = findMatchingWallet(
+        userWallets: userWallets,
+        walletType: parsed.walletType,
+        template: template,
       );
+      if (matchedWallet == null) return null;
 
-      await transactionRepository.saveTransaction(tx);
+      final matchedWalletId = matchedWallet!.id;
+      final walletName = matchedWallet.name;
+      final currencyCode = matchedWallet.currencyCode;
+
+      TransactionModel? tx;
+
+      if (parsed.isBalanceOnly) {
+        // Pure balance statement / inquiry: reconcile wallet balance directly by adjusting opening balance
+        if (parsed.balance != null) {
+          final txs = transactionRepository.getTransactionsByWallet(matchedWallet.id);
+          final currentBal = BalanceCalculator.calculateWalletBalance(
+            openingBalance: matchedWallet.openingBalance,
+            transactions: txs,
+          );
+          final delta = parsed.balance! - currentBal;
+          if (delta.abs() >= 0.01) {
+            final wRepo = walletRepository ?? WalletRepository();
+            final updatedWallet = matchedWallet.copyWith(
+              openingBalance: matchedWallet.openingBalance + delta,
+            );
+            await wRepo.saveWallet(updatedWallet);
+          }
+        }
+      } else {
+        // Normal transaction (deposit / expense)
+        tx = TransactionModel(
+          id: const Uuid().v4(),
+          walletId: matchedWalletId,
+          type: parsed.type,
+          amount: parsed.amount,
+          category: parsed.category,
+          note: parsed.rawBody,
+          date: parsed.date,
+          source: 'sms',
+          smsKey: parsed.smsKey,
+          createdAt: DateTime.now(),
+          rawSmsBody: parsed.rawBody,
+          rawSmsSender: parsed.rawSender,
+        );
+
+        await transactionRepository.saveTransaction(tx);
+
+        // Ground-Truth Wallet Alignment: Align wallet balance silently without creating clutter transactions
+        if (parsed.balance != null) {
+          final txs = transactionRepository.getTransactionsByWallet(matchedWallet.id);
+          final currentBal = BalanceCalculator.calculateWalletBalance(
+            openingBalance: matchedWallet.openingBalance,
+            transactions: txs,
+          );
+          final delta = parsed.balance! - currentBal;
+          if (delta.abs() >= 0.01) {
+            final wRepo = walletRepository ?? WalletRepository();
+            final updatedWallet = matchedWallet.copyWith(
+              openingBalance: matchedWallet.openingBalance + delta,
+            );
+            await wRepo.saveWallet(updatedWallet);
+          }
+        }
+      }
 
       if (showNotification) {
         final prefs = await SharedPreferences.getInstance();
@@ -255,36 +333,68 @@ class SmsService {
       final userWallets = walletRepo.getWallets();
       if (userWallets.isEmpty) return null;
 
-      String? matchedWalletId;
-      String walletName = template.walletNameAr;
-      String currencyCode = 'YER';
-      final matchingWallets = userWallets.where((w) => w.type == parsed.walletType).toList();
-      if (matchingWallets.isNotEmpty) {
-        matchedWalletId = matchingWallets.first.id;
-        walletName = matchingWallets.first.name;
-        currencyCode = matchingWallets.first.currencyCode;
-      } else {
-        matchedWalletId = userWallets.first.id;
-        walletName = userWallets.first.name;
-        currencyCode = userWallets.first.currencyCode;
-      }
-
-      final tx = TransactionModel(
-        id: const Uuid().v4(),
-        walletId: matchedWalletId,
-        type: parsed.type,
-        amount: parsed.amount,
-        category: parsed.category,
-        note: parsed.rawBody,
-        date: parsed.date,
-        source: 'sms',
-        smsKey: parsed.smsKey,
-        createdAt: DateTime.now(),
-        rawSmsBody: parsed.rawBody,
-        rawSmsSender: parsed.rawSender,
+      final matchedWallet = findMatchingWallet(
+        userWallets: userWallets,
+        walletType: parsed.walletType,
+        template: template,
       );
+      if (matchedWallet == null) return null;
 
-      await txRepo.saveTransaction(tx);
+      final matchedWalletId = matchedWallet.id;
+      final walletName = matchedWallet.name;
+      final currencyCode = matchedWallet.currencyCode;
+
+      TransactionModel? tx;
+
+      if (parsed.isBalanceOnly) {
+        if (parsed.balance != null) {
+          final txs = txRepo.getTransactionsByWallet(matchedWallet.id);
+          final currentBal = BalanceCalculator.calculateWalletBalance(
+            openingBalance: matchedWallet.openingBalance,
+            transactions: txs,
+          );
+          final delta = parsed.balance! - currentBal;
+          if (delta.abs() >= 0.01) {
+            final updatedWallet = matchedWallet.copyWith(
+              openingBalance: matchedWallet.openingBalance + delta,
+            );
+            await walletRepo.saveWallet(updatedWallet);
+          }
+        }
+      } else {
+        tx = TransactionModel(
+          id: const Uuid().v4(),
+          walletId: matchedWalletId,
+          type: parsed.type,
+          amount: parsed.amount,
+          category: parsed.category,
+          note: parsed.rawBody,
+          date: parsed.date,
+          source: 'sms',
+          smsKey: parsed.smsKey,
+          createdAt: DateTime.now(),
+          rawSmsBody: parsed.rawBody,
+          rawSmsSender: parsed.rawSender,
+        );
+
+        await txRepo.saveTransaction(tx);
+
+        // Ground-Truth Wallet Alignment: Align wallet balance silently without creating clutter transactions
+        if (parsed.balance != null) {
+          final txs = txRepo.getTransactionsByWallet(matchedWallet.id);
+          final currentBal = BalanceCalculator.calculateWalletBalance(
+            openingBalance: matchedWallet.openingBalance,
+            transactions: txs,
+          );
+          final delta = parsed.balance! - currentBal;
+          if (delta.abs() >= 0.01) {
+            final updatedWallet = matchedWallet.copyWith(
+              openingBalance: matchedWallet.openingBalance + delta,
+            );
+            await walletRepo.saveWallet(updatedWallet);
+          }
+        }
+      }
 
       final prefs = await SharedPreferences.getInstance();
       final uid = DatabaseService.currentUserId ?? 'guest';
@@ -317,6 +427,15 @@ class SmsService {
     required String currencyCode,
   }) async {
     try {
+      if (data.isBalanceOnly) {
+        final balText = AppConstants.formatCurrency(data.balance ?? 0.0, currencyCode);
+        await notificationService.showTransactionAlert(
+          title: '🔄 تحديث الرصيد - $walletName',
+          body: 'تم تحديث رصيد $walletName الفعلي إلى $balText',
+        );
+        return;
+      }
+
       final formattedAmount = AppConstants.formatCurrency(data.amount, currencyCode);
       final isExpense = data.type == 'expense';
       final isPurchase = isExpense && (
