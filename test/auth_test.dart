@@ -5,10 +5,12 @@ import 'package:mizaan/app.dart';
 import 'package:mizaan/core/utils/validators.dart';
 import 'package:mizaan/data/repositories/auth_repository.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
+import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/auth/screens/biometric_gate_screen.dart';
 import 'package:mizaan/features/auth/screens/login_screen.dart';
+import 'package:mizaan/features/auth/screens/register_screen.dart';
 
 class FakeAuthRepository extends AuthRepository {
   User? _user;
@@ -170,6 +172,51 @@ void main() {
       expect(find.text('إنشاء الحساب'), findsOneWidget);
     });
 
+    testWidgets('Navigates back to Login when tapping تسجيل الدخول from Register (opened from Login)', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final fakeAuth = FakeAuthRepository();
+
+      await tester.pumpWidget(
+        MizaanApp(prefs: prefs, authRepository: fakeAuth, homeOverride: const LoginScreen()),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('إنشاء حساب جديد'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ابدأ مع ميزان 🚀'), findsOneWidget);
+
+      final loginLink = find.text('تسجيل الدخول');
+      expect(loginLink, findsOneWidget);
+
+      await tester.tap(loginLink);
+      await tester.pumpAndSettle();
+
+      expect(find.text('أهلاً بك مجدداً في ميزان — كل محافظك في مكان واحد'), findsOneWidget);
+    });
+
+    testWidgets('Navigates to Login Screen when tapping تسجيل الدخول from standalone RegisterScreen', (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final fakeAuth = FakeAuthRepository();
+
+      await tester.pumpWidget(
+        MizaanApp(prefs: prefs, authRepository: fakeAuth, homeOverride: const RegisterScreen(fromLogin: false)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('ابدأ مع ميزان 🚀'), findsOneWidget);
+
+      final loginLink = find.text('تسجيل الدخول');
+      expect(loginLink, findsOneWidget);
+
+      await tester.tap(loginLink);
+      await tester.pumpAndSettle();
+
+      expect(find.text('أهلاً بك مجدداً في ميزان — كل محافظك في مكان واحد'), findsOneWidget);
+    });
+
     testWidgets('Guest login button enters app', (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
@@ -180,7 +227,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final guestBtn = find.text('دخول تجريبي (وضع أوفلاين) 🚀');
+      final guestBtn = find.text('المتابعة بحساب محلي آمن 🛡️');
       expect(guestBtn, findsOneWidget);
 
       await tester.ensureVisible(guestBtn);
@@ -209,7 +256,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('الدخول بالبصمة'), findsNothing);
-      expect(find.text('دخول تجريبي (وضع أوفلاين) 🚀'), findsOneWidget);
+      expect(find.text('المتابعة بحساب محلي آمن 🛡️'), findsOneWidget);
     });
 
     testWidgets('BiometricGateScreen renders secure lock gate without bypass button', (WidgetTester tester) async {
@@ -277,6 +324,33 @@ void main() {
 
       cubit.lockSession();
       expect(cubit.state, isA<BiometricRequired>());
+    });
+
+    test('resetLocalData resets guest status and emits Unauthenticated', () async {
+      SharedPreferences.setMockInitialValues({'guestLoggedIn': true});
+      final prefs = await SharedPreferences.getInstance();
+      final cubit = AuthCubit(
+        authRepository: FakeAuthRepository(),
+        biometricService: FakeBiometricService(),
+        prefs: prefs,
+      );
+
+      expect(cubit.isGuestLoggedIn, isTrue);
+      await cubit.resetLocalData();
+      expect(cubit.isGuestLoggedIn, isFalse);
+      expect(cubit.state, isA<Unauthenticated>());
+    });
+
+    test('DatabaseService sanitizeUserId handles guest and user id correctly', () {
+      expect(DatabaseService.sanitizeUserId(null), 'guest');
+      expect(DatabaseService.sanitizeUserId(''), 'guest');
+      expect(DatabaseService.sanitizeUserId('user@123!'), 'user_123_');
+      expect(DatabaseService.sanitizeUserId('user_abc-123'), 'user_abc-123');
+    });
+
+    test('migrateGuestDataToUser returns 0 when target is guest or uninitialized', () async {
+      final migrated = await DatabaseService.migrateGuestDataToUser('guest');
+      expect(migrated, 0);
     });
   });
 }

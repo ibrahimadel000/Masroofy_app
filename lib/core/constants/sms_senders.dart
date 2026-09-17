@@ -12,6 +12,7 @@ class ParsedSmsData {
   final String rawSender;
   final String rawBody;
   final String smsKey;
+  final String? referenceNumber;
 
   const ParsedSmsData({
     required this.walletType,
@@ -24,6 +25,7 @@ class ParsedSmsData {
     required this.rawSender,
     required this.rawBody,
     required this.smsKey,
+    this.referenceNumber,
   });
 }
 
@@ -190,9 +192,16 @@ class SmsSenderRegistry {
         RegExp(r'(?:تم شراء|شراء|مشتريات)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
       balancePatterns: [
-        RegExp(r'رصيدك\s*(?:هو\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        // 1. Suffix with YER/currency attached: "945.30YERرصيدك", "5,045.30YERرصيدك", "1,445.30YERرصيدك"
+        // Note: Currency is strictly REQUIRED before "رصيدك" to avoid capturing phone numbers or amounts preceding "رصيدك"
+        RegExp(r'([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)\s*رصيدك', caseSensitive: false),
+        // 2. Prefix with optional currency/words: "رصيدك هو 945.30", "رصيدك YER 4045.3", "رصيدك: 945.30", "رصيدك1,445.30YER"
+        RegExp(r'رصيدك\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        // 3. Currency before number with suffix: "YER 2,545.30 رصيدك"
+        RegExp(r'(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)\s*([0-9,]+(?:\.[0-9]+)?)\s*رصيدك', caseSensitive: false),
+        // 4. Combined: "51,245.30YERرصيدك"
         RegExp(r'(?:YER\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|ر\.?ي)+\s*رصيدك', caseSensitive: false),
-        RegExp(r'YER\s*([0-9,]+(?:\.[0-9]+)?)\s*رصيدك', caseSensitive: false),
+        // 5. Explicit account statement inquiry
         RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
     ),
@@ -386,9 +395,46 @@ class SmsSenderRegistry {
     return 'أخرى';
   }
 
+  /// Extract bank reference number from SMS body if present
+  static String? extractReferenceNumber(String body) {
+    final patterns = [
+      RegExp(r'(?:المرجع|مرجع|ref(?:erence)?|رقم العملية|رقم المرجع|رقم الحوالة)[\s:]*([0-9a-zA-Z]+)', caseSensitive: false),
+    ];
+    for (final p in patterns) {
+      final match = p.firstMatch(body);
+      if (match != null && match.groupCount >= 1) {
+        final val = match.group(1)?.trim();
+        if (val != null && val.isNotEmpty && val.length >= 4) {
+          return val;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Fast, deterministic 31-bit polynomial hash for string content across all isolates
+  static String deterministicHash(String input) {
+    int hash = 5381;
+    for (int i = 0; i < input.length; i++) {
+      hash = (((hash << 5) + hash) + input.codeUnitAt(i)) & 0x7FFFFFFF;
+    }
+    return hash.toRadixString(16);
+  }
+
   /// Generate unique deduplication key for an SMS
   static String generateSmsKey(String sender, DateTime date, String body) {
-    return '${sender.trim()}_${date.millisecondsSinceEpoch}_${body.trim().hashCode.toRadixString(16)}';
+    final ref = extractReferenceNumber(body);
+    final cleanSender = sender.trim().toLowerCase();
+    if (ref != null && ref.isNotEmpty) {
+      return '${cleanSender}_ref_$ref';
+    }
+    // Stable day-bucketed normalized content key (resistant to second/minute differences between live listener & inbox)
+    final normalized = normalizeDigits(body)
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final bodyHash = deterministicHash(normalized);
+    return '${cleanSender}_${date.year}_${date.month}_${date.day}_$bodyHash';
   }
 
   /// Parse a single SMS message into a ParsedSmsData object (or null if not matching)
@@ -463,6 +509,9 @@ class SmsSenderRegistry {
       }
     }
 
+    final refNumber = extractReferenceNumber(body);
+    final smsKey = generateSmsKey(sender, date, body);
+
     // Disambiguation: Pure balance inquiry / statement notification
     if (amount == null || type == null) {
       if (balance != null) {
@@ -476,14 +525,14 @@ class SmsSenderRegistry {
           date: date,
           rawSender: sender,
           rawBody: body,
-          smsKey: generateSmsKey(sender, date, body),
+          smsKey: smsKey,
+          referenceNumber: refNumber,
         );
       }
       return null;
     }
 
     final category = guessCategory(body);
-    final smsKey = generateSmsKey(sender, date, body);
 
     return ParsedSmsData(
       walletType: template.walletType,
@@ -496,6 +545,7 @@ class SmsSenderRegistry {
       rawSender: sender,
       rawBody: body,
       smsKey: smsKey,
+      referenceNumber: refNumber,
     );
   }
 }

@@ -17,7 +17,15 @@ class WalletRepository {
         _customFirestore = firestore,
         _customAuth = auth;
 
-  Box<Wallet> get _box => _customBox ?? DatabaseService.walletsBox;
+  Box<Wallet>? get _safeBox {
+    try {
+      return _customBox ?? (DatabaseService.isInitialized ? DatabaseService.walletsBox : null);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Box<Wallet> get _box => _safeBox ?? DatabaseService.walletsBox;
 
   FirebaseFirestore? get _firestore {
     try {
@@ -44,18 +52,32 @@ class WalletRepository {
   }
 
   List<Wallet> getWallets() {
-    final wallets = _box.values.toList();
-    wallets.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return wallets;
+    try {
+      final box = _safeBox;
+      if (box == null) return [];
+      final wallets = box.values.toList();
+      wallets.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return wallets;
+    } catch (_) {
+      return [];
+    }
   }
 
   Stream<List<Wallet>> watchWallets() {
-    return _box.watch().map((_) => getWallets());
+    try {
+      final box = _safeBox;
+      if (box == null) return Stream.value([]);
+      return box.watch().map((_) => getWallets());
+    } catch (_) {
+      return Stream.value([]);
+    }
   }
 
   Wallet? getWalletById(String id) {
     try {
-      return _box.values.firstWhere((w) => w.id == id);
+      final box = _safeBox;
+      if (box == null) return null;
+      return box.values.firstWhere((w) => w.id == id);
     } catch (_) {
       return null;
     }

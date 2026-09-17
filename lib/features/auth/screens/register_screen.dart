@@ -7,8 +7,15 @@ import 'package:mizaan/core/utils/validators.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
 
+import 'package:mizaan/features/auth/screens/login_screen.dart';
+
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  final bool fromLogin;
+
+  const RegisterScreen({
+    super.key,
+    this.fromLogin = false,
+  });
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -229,7 +236,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             style: TextStyle(fontSize: 14, color: Colors.grey),
                           ),
                           TextButton(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () {
+                              if (widget.fromLogin) {
+                                Navigator.pop(context);
+                              } else {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const LoginScreen(),
+                                  ),
+                                );
+                              }
+                            },
                             child: const Text(
                               'تسجيل الدخول',
                               style: TextStyle(

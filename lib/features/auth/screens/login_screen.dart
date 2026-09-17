@@ -186,6 +186,12 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: Navigator.canPop(context)
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+            )
+          : null,
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) async {
           if (state is AuthError) {
@@ -364,12 +370,21 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           TextButton(
                             onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const RegisterScreen(),
-                                ),
-                              );
+                              if (Navigator.canPop(context)) {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const RegisterScreen(fromLogin: false),
+                                  ),
+                                );
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const RegisterScreen(fromLogin: true),
+                                  ),
+                                );
+                              }
                             },
                             child: const Text(
                               'إنشاء حساب جديد',
@@ -390,7 +405,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Padding(
                             padding: EdgeInsets.symmetric(horizontal: 12.0),
                             child: Text(
-                              'أو للدخول بدون إنترنت',
+                              'أو الخصوصية التامة بدون إنترنت',
                               style: TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                           ),
@@ -399,28 +414,55 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Guest / Offline Mode Button
-                      OutlinedButton.icon(
-                        onPressed: isLoading
-                            ? null
-                            : () => context.read<AuthCubit>().continueAsGuest(),
-                        icon: const Icon(Icons.offline_bolt_outlined, color: AppTheme.primaryColor),
-                        label: const Text(
-                          'دخول تجريبي (وضع أوفلاين) 🚀',
-                          style: TextStyle(
-                            color: AppTheme.primaryColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                      // Local Vault Mode Container
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.primaryColor.withValues(alpha: 0.25),
                           ),
+                          color: AppTheme.primaryColor.withValues(alpha: 0.04),
                         ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: BorderSide(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.5),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: isLoading
+                                    ? null
+                                    : () => context.read<AuthCubit>().continueAsGuest(),
+                                icon: const Icon(Icons.shield_outlined, color: AppTheme.primaryColor),
+                                label: const Text(
+                                  'المتابعة بحساب محلي آمن 🛡️',
+                                  style: TextStyle(
+                                    color: AppTheme.primaryColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  side: BorderSide(
+                                    color: AppTheme.primaryColor.withValues(alpha: 0.5),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'بياناتك ومحافظك مشفرة ومحفوظة على جهازك فقط (خصوصية 100%)',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

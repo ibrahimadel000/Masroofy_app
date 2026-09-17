@@ -143,8 +143,8 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
                           : (email ?? 'حسابك محمي للأمان');
                       userSub = 'أكّد هويتك للدخول إلى سجلاتك ومحافظك المالية';
                     } else if (state.isGuest) {
-                      userLabel = 'حساب ضيف (وضع محلي) 🚀';
-                      userSub = 'بياناتك محفوظة محلياً، يرجى تأكيد البصمة للمتابعة';
+                      userLabel = 'حساب محلي آمن 🛡️';
+                      userSub = 'بياناتك المالية مشفرة على هذا الجهاز، أكّد بصمتك للمتابعة';
                     }
                   }
 

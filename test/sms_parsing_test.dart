@@ -206,15 +206,78 @@ void main() {
       expect(parsed.category, 'فواتير');
     });
 
-    test('Deduplication fingerprint hash generates consistent sha256', () {
+    test('Deduplication fingerprint hash generates consistent key despite timestamp drift on same day', () {
       const sender = 'Jaib';
       const body = 'خصم 100ر.ي رص:4230ر.ي للرقم 772004664 سداد يمن موبايل';
       final key1 = SmsSenderRegistry.generateSmsKey(sender, testDate, body);
       final key2 = SmsSenderRegistry.generateSmsKey(sender, testDate, body);
-      final key3 = SmsSenderRegistry.generateSmsKey(sender, testDate.add(const Duration(seconds: 1)), body);
+      // Even if live listener got DateTime.now() 1 minute later than carrier SMS timestamp:
+      final key3 = SmsSenderRegistry.generateSmsKey(sender, testDate.add(const Duration(minutes: 1)), body);
+      // Different day produces different key:
+      final key4 = SmsSenderRegistry.generateSmsKey(sender, testDate.add(const Duration(days: 1)), body);
 
       expect(key1, key2);
-      expect(key1, isNot(key3));
+      expect(key1, key3); // Prevents timestamp drift duplication!
+      expect(key1, isNot(key4));
+    });
+
+    test('User Real Case 1: Kuraimi Transfer 4100 with Suffix Balance 945.30YERرصيدك', () {
+      const sender = 'Kuraimi';
+      const body = 'تم تحويل4,100.00لحساب خليل الرحمن\n945.30YERرصيدك';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 4100.0);
+      expect(parsed.balance, 945.30);
+      expect(parsed.category, 'تحويل');
+    });
+
+    test('User Real Case 2: Kuraimi Deposit 1000 with Suffix Balance 5,045.30YERرصيدك', () {
+      const sender = 'Kuraimi';
+      const body = 'أودع/عادل عبدالواحد لحسابك1,000.00\n5,045.30YERرصيدك';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 1000.0);
+      expect(parsed.balance, 5045.30);
+      expect(parsed.category, 'تحويل');
+    });
+
+    test('User Real Case 3: Kuraimi Purchase with Reference Number extraction', () {
+      const sender = 'Kuraimi';
+      const body = 'تم خصم مبلغ YER 100.00 مقابل مشترياتك من 1588993\nالمرجع: 54477347';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 100.0);
+      expect(parsed.referenceNumber, '54477347');
+      expect(parsed.category, 'بقالة');
+
+      // Verify reference number based key is 100% stable regardless of date
+      final keyA = SmsSenderRegistry.generateSmsKey(sender, testDate, body);
+      final keyB = SmsSenderRegistry.generateSmsKey(sender, testDate.add(const Duration(days: 30)), body);
+      expect(keyA, keyB);
     });
 
     test('Unregistered/Personal SMS is skipped completely', () {

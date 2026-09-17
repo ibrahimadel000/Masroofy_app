@@ -94,4 +94,32 @@ class Wallet extends HiveObject {
       currencyCode: (map['currencyCode'] as String?) ?? 'YER',
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Wallet &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          type == other.type &&
+          colorValue == other.colorValue &&
+          iconCodePoint == other.iconCodePoint &&
+          openingBalance == other.openingBalance &&
+          isFavorite == other.isFavorite &&
+          currencyCode == other.currencyCode &&
+          createdAt == other.createdAt;
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        name,
+        type,
+        colorValue,
+        iconCodePoint,
+        openingBalance,
+        isFavorite,
+        currencyCode,
+        createdAt,
+      );
 }

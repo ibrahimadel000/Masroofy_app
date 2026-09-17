@@ -4,7 +4,6 @@ import 'package:telephony/telephony.dart';
 import 'package:uuid/uuid.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/constants/sms_senders.dart';
-import 'package:mizaan/core/utils/balance_calculator.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/data/repositories/transaction_repository.dart';
@@ -148,18 +147,26 @@ class SmsService {
         );
         if (parsed == null) continue;
 
-        // 3. Deduplication check: Skip if already imported
-        if (transactionRepository.hasSmsKey(parsed.smsKey)) {
-          continue;
-        }
-
-        // 4. Auto-match with user's wallets dynamically
+        // 3. Auto-match with user's wallets dynamically
         final matchedWallet = findMatchingWallet(
           userWallets: userWallets,
           walletType: parsed.walletType,
           template: template,
         );
         final matchedWalletId = matchedWallet?.id;
+
+        // 4. Deduplication check: Skip if already imported
+        if (transactionRepository.isDuplicateSms(
+          smsKey: parsed.smsKey,
+          referenceNumber: parsed.referenceNumber,
+          rawSmsBody: parsed.rawBody,
+          walletId: matchedWalletId ?? '',
+          amount: parsed.amount,
+          type: parsed.type,
+          date: parsed.date,
+        )) {
+          continue;
+        }
 
         results.add(
           SmsCandidateItem(
@@ -175,6 +182,8 @@ class SmsService {
 
     return results;
   }
+
+  static final Set<String> _inFlightKeys = {};
 
   /// Process an incoming message while the app is active in foreground
   Future<TransactionModel?> processIncomingSms({
@@ -206,17 +215,35 @@ class SmsService {
       );
       if (parsed == null) return null;
 
-      if (transactionRepository.hasSmsKey(parsed.smsKey)) return null;
-      if (userWallets.isEmpty) return null;
+      if (_inFlightKeys.contains(parsed.smsKey)) return null;
+      _inFlightKeys.add(parsed.smsKey);
+      Future.delayed(const Duration(seconds: 5), () => _inFlightKeys.remove(parsed.smsKey));
+
+      final wRepo = walletRepository ?? WalletRepository();
+      final currentWallets = wRepo.getWallets().isNotEmpty ? wRepo.getWallets() : userWallets;
+      if (currentWallets.isEmpty) return null;
 
       final matchedWallet = findMatchingWallet(
-        userWallets: userWallets,
+        userWallets: currentWallets,
         walletType: parsed.walletType,
         template: template,
       );
       if (matchedWallet == null) return null;
 
       final matchedWalletId = matchedWallet.id;
+
+      if (transactionRepository.isDuplicateSms(
+        smsKey: parsed.smsKey,
+        referenceNumber: parsed.referenceNumber,
+        rawSmsBody: parsed.rawBody,
+        walletId: matchedWalletId,
+        amount: parsed.amount,
+        type: parsed.type,
+        date: parsed.date,
+      )) {
+        return null;
+      }
+
       final walletName = matchedWallet.name;
       final currencyCode = matchedWallet.currencyCode;
 
@@ -225,16 +252,22 @@ class SmsService {
       if (parsed.isBalanceOnly) {
         // Pure balance statement / inquiry: reconcile wallet balance directly by adjusting opening balance
         if (parsed.balance != null) {
-          final txs = transactionRepository.getTransactionsByWallet(matchedWallet.id);
-          final currentBal = BalanceCalculator.calculateWalletBalance(
-            openingBalance: matchedWallet.openingBalance,
-            transactions: txs,
-          );
-          final delta = parsed.balance! - currentBal;
-          if (delta.abs() >= 0.01) {
-            final wRepo = walletRepository ?? WalletRepository();
-            final updatedWallet = matchedWallet.copyWith(
-              openingBalance: matchedWallet.openingBalance + delta,
+          final freshWallet = wRepo.getWalletById(matchedWalletId) ?? matchedWallet;
+          final txs = transactionRepository.getTransactionsByWallet(matchedWalletId);
+          double txSum = 0.0;
+          for (final t in txs) {
+            if (t.type == 'income') {
+              txSum += t.amount;
+            } else if (t.type == 'expense') {
+              txSum -= t.amount;
+            } else if (t.type == 'adjustment') {
+              txSum += t.amount;
+            }
+          }
+          final targetOpening = parsed.balance! - txSum;
+          if ((targetOpening - freshWallet.openingBalance).abs() >= 0.01) {
+            final updatedWallet = freshWallet.copyWith(
+              openingBalance: targetOpening,
             );
             await wRepo.saveWallet(updatedWallet);
           }
@@ -260,16 +293,22 @@ class SmsService {
 
         // Ground-Truth Wallet Alignment: Align wallet balance silently without creating clutter transactions
         if (parsed.balance != null) {
-          final txs = transactionRepository.getTransactionsByWallet(matchedWallet.id);
-          final currentBal = BalanceCalculator.calculateWalletBalance(
-            openingBalance: matchedWallet.openingBalance,
-            transactions: txs,
-          );
-          final delta = parsed.balance! - currentBal;
-          if (delta.abs() >= 0.01) {
-            final wRepo = walletRepository ?? WalletRepository();
-            final updatedWallet = matchedWallet.copyWith(
-              openingBalance: matchedWallet.openingBalance + delta,
+          final freshWallet = wRepo.getWalletById(matchedWalletId) ?? matchedWallet;
+          final txs = transactionRepository.getTransactionsByWallet(matchedWalletId);
+          double txSum = 0.0;
+          for (final t in txs) {
+            if (t.type == 'income') {
+              txSum += t.amount;
+            } else if (t.type == 'expense') {
+              txSum -= t.amount;
+            } else if (t.type == 'adjustment') {
+              txSum += t.amount;
+            }
+          }
+          final targetOpening = parsed.balance! - txSum;
+          if ((targetOpening - freshWallet.openingBalance).abs() >= 0.01) {
+            final updatedWallet = freshWallet.copyWith(
+              openingBalance: targetOpening,
             );
             await wRepo.saveWallet(updatedWallet);
           }
@@ -320,6 +359,10 @@ class SmsService {
       );
       if (parsed == null) return null;
 
+      if (_inFlightKeys.contains(parsed.smsKey)) return null;
+      _inFlightKeys.add(parsed.smsKey);
+      Future.delayed(const Duration(seconds: 5), () => _inFlightKeys.remove(parsed.smsKey));
+
       if (!DatabaseService.isInitialized) {
         final prefs = await SharedPreferences.getInstance();
         final uid = prefs.getString('current_user_id') ?? 'guest';
@@ -327,8 +370,6 @@ class SmsService {
       }
 
       final txRepo = TransactionRepository();
-      if (txRepo.hasSmsKey(parsed.smsKey)) return null;
-
       final walletRepo = WalletRepository();
       final userWallets = walletRepo.getWallets();
       if (userWallets.isEmpty) return null;
@@ -341,6 +382,19 @@ class SmsService {
       if (matchedWallet == null) return null;
 
       final matchedWalletId = matchedWallet.id;
+
+      if (txRepo.isDuplicateSms(
+        smsKey: parsed.smsKey,
+        referenceNumber: parsed.referenceNumber,
+        rawSmsBody: parsed.rawBody,
+        walletId: matchedWalletId,
+        amount: parsed.amount,
+        type: parsed.type,
+        date: parsed.date,
+      )) {
+        return null;
+      }
+
       final walletName = matchedWallet.name;
       final currencyCode = matchedWallet.currencyCode;
 
@@ -348,15 +402,22 @@ class SmsService {
 
       if (parsed.isBalanceOnly) {
         if (parsed.balance != null) {
-          final txs = txRepo.getTransactionsByWallet(matchedWallet.id);
-          final currentBal = BalanceCalculator.calculateWalletBalance(
-            openingBalance: matchedWallet.openingBalance,
-            transactions: txs,
-          );
-          final delta = parsed.balance! - currentBal;
-          if (delta.abs() >= 0.01) {
-            final updatedWallet = matchedWallet.copyWith(
-              openingBalance: matchedWallet.openingBalance + delta,
+          final freshWallet = walletRepo.getWalletById(matchedWalletId) ?? matchedWallet;
+          final txs = txRepo.getTransactionsByWallet(matchedWalletId);
+          double txSum = 0.0;
+          for (final t in txs) {
+            if (t.type == 'income') {
+              txSum += t.amount;
+            } else if (t.type == 'expense') {
+              txSum -= t.amount;
+            } else if (t.type == 'adjustment') {
+              txSum += t.amount;
+            }
+          }
+          final targetOpening = parsed.balance! - txSum;
+          if ((targetOpening - freshWallet.openingBalance).abs() >= 0.01) {
+            final updatedWallet = freshWallet.copyWith(
+              openingBalance: targetOpening,
             );
             await walletRepo.saveWallet(updatedWallet);
           }
@@ -381,15 +442,22 @@ class SmsService {
 
         // Ground-Truth Wallet Alignment: Align wallet balance silently without creating clutter transactions
         if (parsed.balance != null) {
-          final txs = txRepo.getTransactionsByWallet(matchedWallet.id);
-          final currentBal = BalanceCalculator.calculateWalletBalance(
-            openingBalance: matchedWallet.openingBalance,
-            transactions: txs,
-          );
-          final delta = parsed.balance! - currentBal;
-          if (delta.abs() >= 0.01) {
-            final updatedWallet = matchedWallet.copyWith(
-              openingBalance: matchedWallet.openingBalance + delta,
+          final freshWallet = walletRepo.getWalletById(matchedWalletId) ?? matchedWallet;
+          final txs = txRepo.getTransactionsByWallet(matchedWalletId);
+          double txSum = 0.0;
+          for (final t in txs) {
+            if (t.type == 'income') {
+              txSum += t.amount;
+            } else if (t.type == 'expense') {
+              txSum -= t.amount;
+            } else if (t.type == 'adjustment') {
+              txSum += t.amount;
+            }
+          }
+          final targetOpening = parsed.balance! - txSum;
+          if ((targetOpening - freshWallet.openingBalance).abs() >= 0.01) {
+            final updatedWallet = freshWallet.copyWith(
+              openingBalance: targetOpening,
             );
             await walletRepo.saveWallet(updatedWallet);
           }
@@ -417,6 +485,55 @@ class SmsService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Reconcile wallets with the latest verified SMS balance found in their transaction history
+  Future<int> reconcileWalletsWithLatestSms({
+    required TransactionRepository transactionRepository,
+    required WalletRepository walletRepository,
+  }) async {
+    final wallets = walletRepository.getWallets();
+    int reconciledCount = 0;
+
+    for (final wallet in wallets) {
+      final txs = transactionRepository.getTransactionsByWallet(wallet.id);
+      // Find the newest SMS transaction that contains a parsed balance
+      double? latestBalance;
+
+      for (final tx in txs) {
+        if (tx.rawSmsBody != null) {
+          final parsed = SmsSenderRegistry.parseMessage(
+            sender: tx.rawSmsSender ?? '',
+            body: tx.rawSmsBody!,
+            date: tx.date,
+          );
+          if (parsed != null && parsed.balance != null) {
+            latestBalance = parsed.balance;
+            break; // txs is already sorted by date descending, so first match is latest!
+          }
+        }
+      }
+
+      if (latestBalance != null) {
+        double txSum = 0.0;
+        for (final t in txs) {
+          if (t.type == 'income') {
+            txSum += t.amount;
+          } else if (t.type == 'expense') {
+            txSum -= t.amount;
+          } else if (t.type == 'adjustment') {
+            txSum += t.amount;
+          }
+        }
+        final targetOpening = latestBalance - txSum;
+        if ((targetOpening - wallet.openingBalance).abs() >= 0.01) {
+          final updated = wallet.copyWith(openingBalance: targetOpening);
+          await walletRepository.saveWallet(updated);
+          reconciledCount++;
+        }
+      }
+    }
+    return reconciledCount;
   }
 
   /// Send instant local notification for an imported transaction
@@ -489,6 +606,7 @@ class SmsService {
             transactionRepository: transactionRepository,
             userWallets: userWallets,
             notificationService: notificationService,
+            walletRepository: walletRepository,
             customMappings: customMappings,
             showNotification: true,
           );

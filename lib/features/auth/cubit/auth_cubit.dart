@@ -75,8 +75,12 @@ class AuthCubit extends Cubit<AuthState> {
         email: email,
         password: password,
       );
+      final wasGuest = isGuestLoggedIn;
       await prefs.setBool(keyGuestLoggedIn, false);
       if (credential.user != null) {
+        if (wasGuest) {
+          await DatabaseService.migrateGuestDataToUser(credential.user!.uid);
+        }
         await DatabaseService.switchUser(credential.user!.uid);
       }
       emit(Authenticated(credential.user));
@@ -97,8 +101,12 @@ class AuthCubit extends Cubit<AuthState> {
         email: email,
         password: password,
       );
+      final wasGuest = isGuestLoggedIn;
       await prefs.setBool(keyGuestLoggedIn, false);
       if (credential.user != null) {
+        if (wasGuest) {
+          await DatabaseService.migrateGuestDataToUser(credential.user!.uid);
+        }
         await DatabaseService.switchUser(credential.user!.uid);
       }
       emit(Authenticated(credential.user, isFirstLogin: true));
@@ -163,6 +171,14 @@ class AuthCubit extends Cubit<AuthState> {
     emit(Authenticating());
     await prefs.setBool(keyGuestLoggedIn, false);
     await authRepository.signOut();
+    await DatabaseService.switchUser('guest');
+    emit(Unauthenticated());
+  }
+
+  Future<void> resetLocalData() async {
+    emit(Authenticating());
+    await DatabaseService.resetGuestData();
+    await prefs.setBool(keyGuestLoggedIn, false);
     await DatabaseService.switchUser('guest');
     emit(Unauthenticated());
   }

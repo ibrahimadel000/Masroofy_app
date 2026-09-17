@@ -77,6 +77,29 @@ class FakeTransactionRepository implements TransactionRepository {
   }
 
   @override
+  bool isDuplicateSms({
+    required String smsKey,
+    String? referenceNumber,
+    String? rawSmsBody,
+    required String walletId,
+    required double amount,
+    required String type,
+    required DateTime date,
+  }) {
+    if (_smsKeys.contains(smsKey)) return true;
+    for (final tx in _storage.values) {
+      if (referenceNumber != null && tx.referenceNumber == referenceNumber) return true;
+      if (tx.walletId == walletId && tx.type == type && (tx.amount - amount).abs() < 0.01) {
+        if (tx.date.difference(date).abs().inHours <= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Future<int> cleanDuplicateTransactions() async => 0;
+
+  @override
   Future<void> syncFromFirestore() async {}
 }
 

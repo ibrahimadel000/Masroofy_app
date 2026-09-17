@@ -126,6 +126,77 @@ class DatabaseService {
     }
   }
 
+  /// Migrates all data from the guest/local vault to the authenticated user's database.
+  /// Transfers wallets, transactions, and SMS deduplication keys, then clears the local guest vault.
+  static Future<int> migrateGuestDataToUser(String targetUserId) async {
+    final sanitizedTarget = sanitizeUserId(targetUserId);
+    if (sanitizedTarget == 'guest') return 0;
+    if (!_isHiveInitialized) return 0;
+
+    int migratedItems = 0;
+    try {
+      final guestWallets = await Hive.openBox<Wallet>('wallets_guest');
+      final guestTxs = await Hive.openBox<TransactionModel>('transactions_guest');
+      final guestSms = await Hive.openBox<bool>('sms_keys_guest');
+
+      if (guestWallets.isEmpty && guestTxs.isEmpty && guestSms.isEmpty) {
+        return 0;
+      }
+
+      final targetWallets = await Hive.openBox<Wallet>('wallets_$sanitizedTarget');
+      final targetTxs = await Hive.openBox<TransactionModel>('transactions_$sanitizedTarget');
+      final targetSms = await Hive.openBox<bool>('sms_keys_$sanitizedTarget');
+
+      for (final key in guestWallets.keys) {
+        final wallet = guestWallets.get(key);
+        if (wallet != null) {
+          await targetWallets.put(key, wallet);
+          migratedItems++;
+        }
+      }
+
+      for (final key in guestTxs.keys) {
+        final tx = guestTxs.get(key);
+        if (tx != null) {
+          await targetTxs.put(key, tx);
+          migratedItems++;
+        }
+      }
+
+      for (final key in guestSms.keys) {
+        final val = guestSms.get(key);
+        if (val != null) {
+          await targetSms.put(key, val);
+        }
+      }
+
+      // Clear guest boxes after successful transfer
+      await guestWallets.clear();
+      await guestTxs.clear();
+      await guestSms.clear();
+    } catch (_) {
+      // Gracefully handle any migration errors
+    }
+
+    return migratedItems;
+  }
+
+  /// Resets and clears all local guest vault data (wallets, transactions, sms keys).
+  static Future<void> resetGuestData() async {
+    if (!_isHiveInitialized) return;
+    try {
+      final guestWallets = await Hive.openBox<Wallet>('wallets_guest');
+      final guestTxs = await Hive.openBox<TransactionModel>('transactions_guest');
+      final guestSms = await Hive.openBox<bool>('sms_keys_guest');
+
+      await guestWallets.clear();
+      await guestTxs.clear();
+      await guestSms.clear();
+    } catch (_) {
+      // Gracefully ignore in non-hive environments
+    }
+  }
+
   static Box<Wallet> get walletsBox {
     if (_activeWalletsBox != null && _activeWalletsBox!.isOpen) {
       return _activeWalletsBox!;

@@ -46,6 +46,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (Platform.isAndroid) {
         _initSmsListenerAndPermissions();
         _triggerAutoImportIfEnabled();
+      } else {
+        _runStartupDuplicateCleanupAndReconcile();
       }
       _checkNotificationPermissionOnce();
       _checkConnectivity();
@@ -137,39 +139,70 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _triggerAutoImportIfEnabled() async {
+    // 1. Clean existing duplicates first
+    final cleaned = await TransactionRepository().cleanDuplicateTransactions();
+    if (cleaned > 0 && mounted) {
+      context.read<TransactionsCubit>().loadTransactions();
+      context.read<WalletsCubit>().loadWallets();
+      context.read<StatsCubit>().loadStats();
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final uid = DatabaseService.currentUserId ?? 'guest';
     final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
         prefs.getBool('smsAutoImportEnabled') ??
         true;
-    if (!autoImportEnabled) return;
 
-    if (!mounted) return;
-    final walletsState = context.read<WalletsCubit>().state;
-    final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
-    if (wallets.isEmpty) return;
+    if (autoImportEnabled && mounted) {
+      final walletsState = context.read<WalletsCubit>().state;
+      final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+      if (wallets.isNotEmpty) {
+        final importedCount = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+        if (importedCount > 0 && mounted) {
+          context.read<TransactionsCubit>().loadTransactions();
+          context.read<WalletsCubit>().loadWallets();
+          context.read<StatsCubit>().loadStats();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppTheme.primaryColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              content: Row(
+                children: [
+                  const Icon(Icons.mark_email_read_rounded, color: Colors.white),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('تم استيراد $importedCount حركات تلقائياً وتحديث المحفظة 📩'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      }
+    }
 
-    final importedCount = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
-    if (importedCount > 0 && mounted) {
-      context.read<TransactionsCubit>().loadTransactions();
+    // 2. Reconcile wallets with the latest bank SMS statement balance
+    final reconciled = await const SmsService().reconcileWalletsWithLatestSms(
+      transactionRepository: TransactionRepository(),
+      walletRepository: WalletRepository(),
+    );
+    if (reconciled > 0 && mounted) {
       context.read<WalletsCubit>().loadWallets();
       context.read<StatsCubit>().loadStats();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppTheme.primaryColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          content: Row(
-            children: [
-              const Icon(Icons.mark_email_read_rounded, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('تم استيراد $importedCount حركات تلقائياً وتحديث المحفظة 📩'),
-              ),
-            ],
-          ),
-        ),
-      );
+    }
+  }
+
+  Future<void> _runStartupDuplicateCleanupAndReconcile() async {
+    final cleaned = await TransactionRepository().cleanDuplicateTransactions();
+    final reconciled = await const SmsService().reconcileWalletsWithLatestSms(
+      transactionRepository: TransactionRepository(),
+      walletRepository: WalletRepository(),
+    );
+    if ((cleaned > 0 || reconciled > 0) && mounted) {
+      context.read<WalletsCubit>().loadWallets();
+      context.read<TransactionsCubit>().loadTransactions();
+      context.read<StatsCubit>().loadStats();
     }
   }
 
@@ -330,8 +363,24 @@ class _HomeMainView extends StatelessWidget {
 
             return RefreshIndicator(
               onRefresh: () async {
-                context.read<WalletsCubit>().loadWallets();
-                context.read<TransactionsCubit>().loadTransactions();
+                await TransactionRepository().cleanDuplicateTransactions();
+                await const SmsService().reconcileWalletsWithLatestSms(
+                  transactionRepository: TransactionRepository(),
+                  walletRepository: WalletRepository(),
+                );
+                if (Platform.isAndroid && context.mounted) {
+                  final wallets = context.read<WalletsCubit>().state is WalletsLoaded
+                      ? (context.read<WalletsCubit>().state as WalletsLoaded).wallets
+                      : <Wallet>[];
+                  if (wallets.isNotEmpty) {
+                    await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+                  }
+                }
+                if (context.mounted) {
+                  context.read<WalletsCubit>().loadWallets();
+                  context.read<TransactionsCubit>().loadTransactions();
+                  context.read<StatsCubit>().loadStats();
+                }
               },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),

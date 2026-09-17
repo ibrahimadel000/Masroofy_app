@@ -57,8 +57,9 @@ class AppRoutes {
           settings: routeSettings,
         );
       case register:
+        final fromLogin = routeSettings.arguments is bool ? routeSettings.arguments as bool : false;
         return MaterialPageRoute(
-          builder: (_) => const RegisterScreen(),
+          builder: (_) => RegisterScreen(fromLogin: fromLogin),
           settings: routeSettings,
         );
       case biometricGate:

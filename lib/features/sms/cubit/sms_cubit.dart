@@ -1,6 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
-import 'package:mizaan/core/utils/balance_calculator.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/data/repositories/transaction_repository.dart';
@@ -100,28 +99,36 @@ class SmsCubit extends Cubit<SmsState> {
     int count = 0;
     try {
       final wRepo = walletRepository ?? WalletRepository();
+
+      // 1. Sort items chronologically (oldest first, newest last)
+      selectedItems.sort((a, b) => a.data.date.compareTo(b.data.date));
+
+      final Map<String, double> latestBalancesByWallet = {};
+
       for (final item in selectedItems) {
         final walletId = item.targetWalletId;
         if (walletId == null) continue;
-        final wallet = wRepo.getWalletById(walletId);
+
+        if (item.data.balance != null) {
+          latestBalancesByWallet[walletId] = item.data.balance!;
+        }
 
         if (item.data.isBalanceOnly) {
-          if (wallet != null && item.data.balance != null) {
-            final txs = transactionRepository.getTransactionsByWallet(wallet.id);
-            final currentBal = BalanceCalculator.calculateWalletBalance(
-              openingBalance: wallet.openingBalance,
-              transactions: txs,
-            );
-            final delta = item.data.balance! - currentBal;
-            if (delta.abs() >= 0.01) {
-              final updatedWallet = wallet.copyWith(
-                openingBalance: wallet.openingBalance + delta,
-              );
-              await wRepo.saveWallet(updatedWallet);
-              count++;
-            }
-          }
+          count++;
         } else {
+          // Check for duplicates before saving
+          if (transactionRepository.isDuplicateSms(
+            smsKey: item.data.smsKey,
+            referenceNumber: item.data.referenceNumber,
+            rawSmsBody: item.data.rawBody,
+            walletId: walletId,
+            amount: item.data.amount,
+            type: item.data.type,
+            date: item.data.date,
+          )) {
+            continue;
+          }
+
           final tx = TransactionModel(
             id: const Uuid().v4(),
             walletId: walletId,
@@ -139,21 +146,32 @@ class SmsCubit extends Cubit<SmsState> {
 
           await transactionRepository.saveTransaction(tx);
           count++;
+        }
+      }
 
-          // Ground-Truth Wallet Alignment: Align wallet balance silently without creating clutter transactions
-          if (wallet != null && item.data.balance != null) {
-            final txs = transactionRepository.getTransactionsByWallet(wallet.id);
-            final currentBal = BalanceCalculator.calculateWalletBalance(
-              openingBalance: wallet.openingBalance,
-              transactions: txs,
-            );
-            final delta = item.data.balance! - currentBal;
-            if (delta.abs() >= 0.01) {
-              final updatedWallet = wallet.copyWith(
-                openingBalance: wallet.openingBalance + delta,
-              );
-              await wRepo.saveWallet(updatedWallet);
+      // 2. Reconcile each wallet ONCE with its newest verified bank balance
+      for (final entry in latestBalancesByWallet.entries) {
+        final walletId = entry.key;
+        final targetBalance = entry.value;
+        final freshWallet = wRepo.getWalletById(walletId);
+        if (freshWallet != null) {
+          final txs = transactionRepository.getTransactionsByWallet(walletId);
+          double txSum = 0.0;
+          for (final t in txs) {
+            if (t.type == 'income') {
+              txSum += t.amount;
+            } else if (t.type == 'expense') {
+              txSum -= t.amount;
+            } else if (t.type == 'adjustment') {
+              txSum += t.amount;
             }
+          }
+          final targetOpening = targetBalance - txSum;
+          if ((targetOpening - freshWallet.openingBalance).abs() >= 0.01) {
+            final updatedWallet = freshWallet.copyWith(
+              openingBalance: targetOpening,
+            );
+            await wRepo.saveWallet(updatedWallet);
           }
         }
       }
@@ -184,29 +202,37 @@ class SmsCubit extends Cubit<SmsState> {
       int count = 0;
       final List<SmsCandidateItem> importedItems = [];
       final wRepo = walletRepository ?? WalletRepository();
-      for (final item in items) {
+
+      // 1. Sort items chronologically (oldest first, newest last)
+      final sortedItems = List<SmsCandidateItem>.from(items)
+        ..sort((a, b) => a.data.date.compareTo(b.data.date));
+
+      final Map<String, double> latestBalancesByWallet = {};
+
+      for (final item in sortedItems) {
         final walletId = item.targetWalletId;
         if (walletId == null) continue;
-        final wallet = wRepo.getWalletById(walletId);
+
+        if (item.data.balance != null) {
+          latestBalancesByWallet[walletId] = item.data.balance!;
+        }
 
         if (item.data.isBalanceOnly) {
-          if (wallet != null && item.data.balance != null) {
-            final txs = transactionRepository.getTransactionsByWallet(wallet.id);
-            final currentBal = BalanceCalculator.calculateWalletBalance(
-              openingBalance: wallet.openingBalance,
-              transactions: txs,
-            );
-            final delta = item.data.balance! - currentBal;
-            if (delta.abs() >= 0.01) {
-              final updatedWallet = wallet.copyWith(
-                openingBalance: wallet.openingBalance + delta,
-              );
-              await wRepo.saveWallet(updatedWallet);
-              importedItems.add(item);
-              count++;
-            }
-          }
+          count++;
         } else {
+          // Check for duplicates before saving
+          if (transactionRepository.isDuplicateSms(
+            smsKey: item.data.smsKey,
+            referenceNumber: item.data.referenceNumber,
+            rawSmsBody: item.data.rawBody,
+            walletId: walletId,
+            amount: item.data.amount,
+            type: item.data.type,
+            date: item.data.date,
+          )) {
+            continue;
+          }
+
           final tx = TransactionModel(
             id: const Uuid().v4(),
             walletId: walletId,
@@ -225,21 +251,32 @@ class SmsCubit extends Cubit<SmsState> {
           await transactionRepository.saveTransaction(tx);
           importedItems.add(item);
           count++;
+        }
+      }
 
-          // Ground-Truth Wallet Alignment: Align wallet balance silently without creating clutter transactions
-          if (wallet != null && item.data.balance != null) {
-            final txs = transactionRepository.getTransactionsByWallet(wallet.id);
-            final currentBal = BalanceCalculator.calculateWalletBalance(
-              openingBalance: wallet.openingBalance,
-              transactions: txs,
-            );
-            final delta = item.data.balance! - currentBal;
-            if (delta.abs() >= 0.01) {
-              final updatedWallet = wallet.copyWith(
-                openingBalance: wallet.openingBalance + delta,
-              );
-              await wRepo.saveWallet(updatedWallet);
+      // 2. Reconcile each wallet ONCE with its newest verified bank balance
+      for (final entry in latestBalancesByWallet.entries) {
+        final walletId = entry.key;
+        final targetBalance = entry.value;
+        final freshWallet = wRepo.getWalletById(walletId);
+        if (freshWallet != null) {
+          final txs = transactionRepository.getTransactionsByWallet(walletId);
+          double txSum = 0.0;
+          for (final t in txs) {
+            if (t.type == 'income') {
+              txSum += t.amount;
+            } else if (t.type == 'expense') {
+              txSum -= t.amount;
+            } else if (t.type == 'adjustment') {
+              txSum += t.amount;
             }
+          }
+          final targetOpening = targetBalance - txSum;
+          if ((targetOpening - freshWallet.openingBalance).abs() >= 0.01) {
+            final updatedWallet = freshWallet.copyWith(
+              openingBalance: targetOpening,
+            );
+            await wRepo.saveWallet(updatedWallet);
           }
         }
       }

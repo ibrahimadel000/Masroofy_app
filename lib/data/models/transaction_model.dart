@@ -118,4 +118,51 @@ class TransactionModel extends HiveObject {
       rawSmsSender: map['rawSmsSender'] as String?,
     );
   }
+
+  /// Extracts transaction reference number from note or rawSmsBody if available
+  String? get referenceNumber {
+    final text = rawSmsBody ?? note;
+    if (text == null || text.isEmpty) return null;
+    final patterns = [
+      RegExp(r'(?:المرجع|مرجع|ref(?:erence)?|رقم العملية|رقم المرجع|رقم الحوالة)[\s:]*([0-9a-zA-Z]+)', caseSensitive: false),
+    ];
+    for (final p in patterns) {
+      final match = p.firstMatch(text);
+      if (match != null && match.groupCount >= 1) {
+        final val = match.group(1)?.trim();
+        if (val != null && val.isNotEmpty && val.length >= 4) {
+          return val;
+        }
+      }
+    }
+    return null;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TransactionModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          walletId == other.walletId &&
+          type == other.type &&
+          amount == other.amount &&
+          category == other.category &&
+          note == other.note &&
+          date == other.date &&
+          source == other.source &&
+          smsKey == other.smsKey;
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        walletId,
+        type,
+        amount,
+        category,
+        note,
+        date,
+        source,
+        smsKey,
+      );
 }

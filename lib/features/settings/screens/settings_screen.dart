@@ -12,6 +12,7 @@ import 'package:mizaan/data/services/biometric_service.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
+import 'package:mizaan/features/auth/screens/login_screen.dart';
 import 'package:mizaan/features/auth/screens/register_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -355,13 +356,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+              Icon(Icons.shield_outlined, color: AppTheme.primaryColor, size: 26),
               SizedBox(width: 8),
-              Text('تنبيه وضع الضيف', style: TextStyle(fontSize: 18)),
+              Text('إدارة الحساب المحلي', style: TextStyle(fontSize: 18)),
             ],
           ),
           content: const Text(
-            'أنت تستخدم التطبيق في وضع الضيف (المحلي)، وتُحفظ سجلاتك على هذا الهاتف فقط.\n\nعند تسجيل الخروج، لن تتمكن من استرجاع بياناتك على جهاز آخر ما لم تربط حسابك ببريد إلكتروني أولاً.\n\nماذا ترغب أن تفعل؟',
+            'أنت تستخدم التطبيق في الوضع المحلي (خزينة خاصة على هذا الهاتف فقط).\n\nلحفظ سجلاتك والوصول إليها من أي جهاز آخر، يُنصح بربط حسابك بالسحابة أولاً (سيتم ترحيل كافة سجلاتك الحالية).\n\nإذا رغبت في مسح البيانات، سيتم حذف كافة المحافظ والعمليات من هذا الهاتف والبدء من جديد.',
             style: TextStyle(fontSize: 13, height: 1.5),
           ),
           actions: [
@@ -374,8 +375,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 foregroundColor: Colors.red.shade700,
                 side: BorderSide(color: Colors.red.shade300),
               ),
-              onPressed: () => Navigator.pop(ctx, 'logout'),
-              child: const Text('خروج على أي حال'),
+              onPressed: () => Navigator.pop(ctx, 'reset'),
+              child: const Text('مسح البيانات والبدء من جديد'),
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
@@ -383,7 +384,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 foregroundColor: Colors.white,
               ),
               icon: const Icon(Icons.cloud_upload_rounded, size: 16),
-              label: const Text('ربط حسابي أولاً'),
+              label: const Text('ترقية وحفظ في السحابة ☁️'),
               onPressed: () => Navigator.pop(ctx, 'register'),
             ),
           ],
@@ -398,7 +399,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
 
-      if (choice != 'logout') return;
+      if (choice == 'reset' && mounted) {
+        await context.read<AuthCubit>().resetLocalData();
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
+        }
+        return;
+      }
+
+      return;
     } else {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -421,12 +430,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
 
       if (confirmed != true) return;
-    }
 
-    if (mounted) {
-      await context.read<AuthCubit>().signOut();
       if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
+        await context.read<AuthCubit>().signOut();
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
+        }
       }
     }
   }
@@ -661,21 +670,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
           ],
 
-          // Section 5: Logout
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.red.shade50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.red.shade200),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.logout_rounded, color: Colors.red),
-              title: const Text(
-                'تسجيل الخروج',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-              ),
-              onTap: _logout,
-            ),
+          // Section 5: Logout or Local Vault Reset
+          BlocBuilder<AuthCubit, AuthState>(
+            builder: (context, state) {
+              final isGuest = state is Authenticated && state.isGuest;
+              final titleText = isGuest ? 'إعادة ضبط الحساب المحلي (مسح السجلات)' : 'تسجيل الخروج';
+              final subtitleText = isGuest
+                  ? 'حذف المحافظ والعمليات من هذا الهاتف والبدء من جديد'
+                  : 'الخروج بأمان من حسابك السحابي الحالي';
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                ),
+                child: ListTile(
+                  leading: Icon(
+                    isGuest ? Icons.cleaning_services_rounded : Icons.logout_rounded,
+                    color: Colors.red.shade700,
+                  ),
+                  title: Text(
+                    titleText,
+                    style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    subtitleText,
+                    style: TextStyle(color: Colors.red.shade400, fontSize: 11),
+                  ),
+                  onTap: _logout,
+                ),
+              );
+            },
           ),
           const SizedBox(height: 24),
 
@@ -725,22 +751,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (isGuest || user == null) {
           return Container(
             margin: const EdgeInsets.only(bottom: 20.0),
-            padding: const EdgeInsets.all(18.0),
+            padding: const EdgeInsets.all(20.0),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
+              gradient: const LinearGradient(
                 colors: [
-                  Colors.amber.shade800,
-                  Colors.amber.shade900,
+                  Color(0xFF1E293B), // Slate 800
+                  Color(0xFF0F172A), // Slate 900
                 ],
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
               ),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppTheme.primaryColor.withValues(alpha: 0.35),
+                width: 1.2,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.amber.shade800.withValues(alpha: 0.25),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
@@ -750,22 +780,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: AppTheme.primaryColor.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                        ),
                       ),
-                      child: const Icon(Icons.person_outline_rounded, color: Colors.white, size: 28),
+                      child: const Icon(
+                        Icons.shield_outlined,
+                        color: AppTheme.primaryColor,
+                        size: 28,
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                    const SizedBox(width: 14),
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             children: [
                               Text(
-                                'حساب ضيف (وضع أوفلاين)',
+                                'الحساب المحلي (خزينة خاصة)',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
@@ -773,14 +810,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               ),
                               SizedBox(width: 6),
-                              Text('🚀', style: TextStyle(fontSize: 14)),
+                              Text('🛡️', style: TextStyle(fontSize: 14)),
                             ],
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: 4),
                           Text(
-                            'بياناتك ومحافظك محفوظة محلياً على هذا الهاتف',
+                            'خصوصية تامة 100% — مشفر ومحفوظ على هذا الهاتف',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.85),
+                              color: Colors.white70,
                               fontSize: 12,
                             ),
                           ),
@@ -789,33 +826,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                const Divider(color: Colors.white24, height: 1),
-                const SizedBox(height: 12),
-                Text(
-                  'لحماية سجلاتك من الضياع عند تغيير الهاتف أو مسح التطبيق، اربط حسابك ببريد إلكتروني الآن:',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 12, height: 1.4),
+                const SizedBox(height: 16),
+                // Security & Privacy Badges
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock_outline_rounded, color: Colors.greenAccent, size: 14),
+                          SizedBox(width: 4),
+                          Text(
+                            'مشفر محلياً',
+                            style: TextStyle(color: Colors.white, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.cloud_off_rounded, color: Colors.cyanAccent, size: 14),
+                          SizedBox(width: 4),
+                          Text(
+                            'بدون خوادم خارجية',
+                            style: TextStyle(color: Colors.white, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 14),
+                const Divider(color: Colors.white12, height: 1),
                 const SizedBox(height: 12),
+                const Text(
+                  'لحفظ سجلاتك ضد الضياع والوصول إليها من أي جهاز، فعّل المزامنة السحابية (سيتم ترحيل كافة محافظك وسجلاتك الحالية فوراً وبأمان):',
+                  style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                ),
+                const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
                   height: 44,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.amber.shade900,
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
+                      elevation: 2,
                     ),
                     icon: const Icon(Icons.cloud_upload_rounded, size: 18),
                     label: const Text(
-                      'ربط الحساب ببريد إلكتروني ☁️',
+                      'ترقية وتفعيل المزامنة السحابية ☁️',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Center(
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.login_rounded, size: 16),
+                    label: const Text(
+                      'لديك حساب سحابي بالفعل؟ تسجيل الدخول',
+                      style: TextStyle(
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
                       );
                     },
                   ),
