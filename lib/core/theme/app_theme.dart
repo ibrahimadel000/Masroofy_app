@@ -40,6 +40,32 @@ class AppTheme {
           borderRadius: BorderRadius.circular(16),
         ),
       ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: lightSurface,
+        headerBackgroundColor: primaryColor,
+        headerForegroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return Colors.black87;
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return primaryColor;
+          return null;
+        }),
+      ),
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: lightSurface,
+        hourMinuteColor: lightBackground,
+        hourMinuteTextColor: Colors.black87,
+        dayPeriodColor: primaryColor.withValues(alpha: 0.15),
+        dayPeriodTextColor: primaryColor,
+        dialBackgroundColor: lightBackground,
+        dialHandColor: primaryColor,
+        dialTextColor: Colors.black87,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
     );
   }
 
@@ -73,6 +99,32 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: darkSurface,
+        headerBackgroundColor: primaryColor,
+        headerForegroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return Colors.white70;
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return primaryColor;
+          return null;
+        }),
+      ),
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: darkSurface,
+        hourMinuteColor: darkBackground,
+        hourMinuteTextColor: Colors.white,
+        dayPeriodColor: primaryColor.withValues(alpha: 0.3),
+        dayPeriodTextColor: Colors.white,
+        dialBackgroundColor: darkBackground,
+        dialHandColor: primaryColor,
+        dialTextColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );
   }

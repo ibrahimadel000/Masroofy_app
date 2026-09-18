@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,6 +8,8 @@ import 'package:mizaan/core/utils/balance_calculator.dart';
 import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
+import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
+import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/transactions/screens/add_transaction_screen.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
@@ -37,6 +40,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentTabIndex = 0;
   bool _isOffline = false;
+  Timer? _connectivityTimer;
 
   @override
   void initState() {
@@ -52,18 +56,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _checkNotificationPermissionOnce();
       _checkConnectivity();
     });
+
+    // Dynamically poll connectivity every 4 seconds so the offline banner disappears promptly on reconnection
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _connectivityTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+        if (mounted) _checkConnectivity();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _connectivityTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && Platform.isAndroid) {
-      _triggerAutoImportIfEnabled();
+    if (state == AppLifecycleState.resumed) {
+      _checkConnectivity();
+      if (Platform.isAndroid) {
+        _triggerAutoImportIfEnabled();
+      }
     }
   }
 
@@ -93,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _checkConnectivity() async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
     try {
       final result = await InternetAddress.lookup('google.com')
           .timeout(const Duration(seconds: 3));
@@ -155,7 +171,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (autoImportEnabled && mounted) {
       final walletsState = context.read<WalletsCubit>().state;
-      final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+      List<Wallet> wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+      if (wallets.isEmpty) {
+        wallets = WalletRepository().getWallets();
+      }
       if (wallets.isNotEmpty) {
         final importedCount = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
         if (importedCount > 0 && mounted) {
@@ -299,21 +318,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildOfflineBanner() {
-    if (!_isOffline) return const SizedBox.shrink();
-    return Container(
-      width: double.infinity,
-      color: Colors.amber.shade800,
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
-          SizedBox(width: 8),
-          Text(
-            'وضع أوفلاين — سيتم المزامنة لاحقاً',
-            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-          ),
-        ],
+    final authState = context.watch<AuthCubit>().state;
+    final isGuest = (authState is Authenticated && authState.isGuest) ||
+        (DatabaseService.currentUserId == 'guest');
+    if (isGuest || !_isOffline) return const SizedBox.shrink();
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      child: Container(
+        width: double.infinity,
+        color: Colors.amber.shade800,
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
+            SizedBox(width: 8),
+            Text(
+              'وضع أوفلاين — سيتم المزامنة لاحقاً',
+              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
       ),
     );
   }

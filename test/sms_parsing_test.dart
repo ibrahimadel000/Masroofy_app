@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/constants/sms_senders.dart';
+import 'package:mizaan/data/models/transaction_model.dart';
+import 'package:mizaan/data/repositories/transaction_repository.dart';
 
 void main() {
   group('Real Yemeni Wallets SMS Parsing Tests (Step 6 Verification)', () {
@@ -374,6 +376,44 @@ void main() {
       expect(parsed.amount, 300.0);
       expect(parsed.balance, 2700.0);
       expect(parsed.isBalanceOnly, isFalse);
+    });
+
+    test('Deduplication: TransactionRepository.deduplicateList collapses duplicate SMS transactions across varying timestamps', () {
+      final tx1 = TransactionModel(
+        id: 'uuid_1',
+        walletId: 'kuraimi_1',
+        type: 'expense',
+        amount: 4100.0,
+        category: 'تحويل',
+        note: 'تم تحويل4,100.00لحساب خليل الرحمن\n945.30YERرصيدك',
+        rawSmsBody: 'تم تحويل4,100.00لحساب خليل الرحمن\n945.30YERرصيدك',
+        date: DateTime(2026, 9, 17, 1, 21),
+        source: 'sms',
+        createdAt: DateTime(2026, 9, 17, 1, 21),
+      );
+
+      final tx2 = TransactionModel(
+        id: 'uuid_2',
+        walletId: 'kuraimi_1',
+        type: 'expense',
+        amount: 4100.0,
+        category: 'تحويل',
+        note: 'تم تحويل4,100.00لحساب خليل الرحمن\n945.30YERرصيدك',
+        rawSmsBody: 'تم تحويل4,100.00لحساب خليل الرحمن\n945.30YERرصيدك',
+        date: DateTime(2026, 9, 17, 8, 45), // 7 hours later
+        source: 'sms',
+        createdAt: DateTime(2026, 9, 17, 8, 45),
+      );
+
+      final result = TransactionRepository.deduplicateList([tx1, tx2]);
+      expect(result.length, 1);
+      expect(result.first.id, 'uuid_1');
+    });
+
+    test('Deduplication: normalizeBodyForComparison matches despite whitespace or Arabic digits variations', () {
+      final norm1 = TransactionRepository.normalizeBodyForComparison('تم تحويل4,100.00لحساب خليل الرحمن\n945.30YERرصيدك');
+      final norm2 = TransactionRepository.normalizeBodyForComparison('تم تحويل 4,100.00 لحساب خليل الرحمن \r\n 945.30 YER رصيدك');
+      expect(norm1, norm2);
     });
   });
 }

@@ -86,29 +86,286 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('ar'),
-    );
-    if (picked != null) {
-      if (!mounted) return;
-      final pickedTime = await showTimePicker(
+    try {
+      final now = DateTime.now();
+      DateTime tempDate = _selectedDate;
+
+      await showModalBottomSheet(
         context: context,
-        initialTime: TimeOfDay.fromDateTime(_selectedDate),
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (modalContext, setModalState) {
+              final isToday = tempDate.year == now.year &&
+                  tempDate.month == now.month &&
+                  tempDate.day == now.day;
+              final isYesterday = tempDate.year == now.subtract(const Duration(days: 1)).year &&
+                  tempDate.month == now.subtract(const Duration(days: 1)).month &&
+                  tempDate.day == now.subtract(const Duration(days: 1)).day;
+              final isDayBefore = tempDate.year == now.subtract(const Duration(days: 2)).year &&
+                  tempDate.month == now.subtract(const Duration(days: 2)).month &&
+                  tempDate.day == now.subtract(const Duration(days: 2)).day;
+
+              return SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Drag handle
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const Icon(Icons.event_note_rounded, color: AppTheme.primaryColor),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'تحديد تاريخ ووقت الحركة',
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Quick Date Chips
+                      const Text(
+                        'اختصارات سريعة للتاريخ',
+                        style: TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ActionChip(
+                            avatar: const Icon(Icons.bolt_rounded, size: 16, color: Colors.amber),
+                            label: const Text('الآن فوراً'),
+                            onPressed: () {
+                              setModalState(() => tempDate = DateTime.now());
+                            },
+                          ),
+                          ChoiceChip(
+                            avatar: const Icon(Icons.today_rounded, size: 16),
+                            label: const Text('اليوم'),
+                            selected: isToday,
+                            selectedColor: AppTheme.primaryColor,
+                            labelStyle: TextStyle(
+                              color: isToday ? Colors.white : null,
+                              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (_) {
+                              setModalState(() {
+                                tempDate = DateTime(
+                                  now.year,
+                                  now.month,
+                                  now.day,
+                                  tempDate.hour,
+                                  tempDate.minute,
+                                );
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            avatar: const Icon(Icons.history_rounded, size: 16),
+                            label: const Text('أمس'),
+                            selected: isYesterday,
+                            selectedColor: AppTheme.primaryColor,
+                            labelStyle: TextStyle(
+                              color: isYesterday ? Colors.white : null,
+                              fontWeight: isYesterday ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (_) {
+                              final y = now.subtract(const Duration(days: 1));
+                              setModalState(() {
+                                tempDate = DateTime(
+                                  y.year,
+                                  y.month,
+                                  y.day,
+                                  tempDate.hour,
+                                  tempDate.minute,
+                                );
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            label: const Text('قبل يومين'),
+                            selected: isDayBefore,
+                            selectedColor: AppTheme.primaryColor,
+                            labelStyle: TextStyle(
+                              color: isDayBefore ? Colors.white : null,
+                              fontWeight: isDayBefore ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (_) {
+                              final d = now.subtract(const Duration(days: 2));
+                              setModalState(() {
+                                tempDate = DateTime(
+                                  d.year,
+                                  d.month,
+                                  d.day,
+                                  tempDate.hour,
+                                  tempDate.minute,
+                                );
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Current Selected Date & Time interactive cards
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () async {
+                                  try {
+                                    final picked = await showDatePicker(
+                                      context: modalContext,
+                                      initialDate: tempDate,
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      locale: const Locale('ar'),
+                                    );
+                                    if (picked != null) {
+                                      setModalState(() {
+                                        tempDate = DateTime(
+                                          picked.year,
+                                          picked.month,
+                                          picked.day,
+                                          tempDate.hour,
+                                          tempDate.minute,
+                                        );
+                                      });
+                                    }
+                                  } catch (e) {
+                                    debugPrint('DatePicker error: $e');
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.calendar_month_rounded, size: 16, color: AppTheme.primaryColor),
+                                          SizedBox(width: 6),
+                                          Text('التاريخ (اضغط للتقويم)', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        AppConstants.formatDate(tempDate),
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Container(width: 1, height: 45, color: Colors.grey.withValues(alpha: 0.2)),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () async {
+                                  try {
+                                    final picked = await showTimePicker(
+                                      context: modalContext,
+                                      initialTime: TimeOfDay.fromDateTime(tempDate),
+                                    );
+                                    if (picked != null) {
+                                      setModalState(() {
+                                        tempDate = DateTime(
+                                          tempDate.year,
+                                          tempDate.month,
+                                          tempDate.day,
+                                          picked.hour,
+                                          picked.minute,
+                                        );
+                                      });
+                                    }
+                                  } catch (e) {
+                                    debugPrint('TimePicker error: $e');
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.access_time_rounded, size: 16, color: AppTheme.primaryColor),
+                                          SizedBox(width: 6),
+                                          Text('الوقت (اضغط للتغيير)', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        AppConstants.formatTime(tempDate),
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // Confirm Button
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() => _selectedDate = tempDate);
+                          Navigator.pop(ctx);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: const Icon(Icons.check_rounded, size: 18),
+                        label: const Text('اعتماد التاريخ والوقت', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       );
-      final finalTime = pickedTime ?? TimeOfDay.fromDateTime(_selectedDate);
-      setState(() {
-        _selectedDate = DateTime(
-          picked.year,
-          picked.month,
-          picked.day,
-          finalTime.hour,
-          finalTime.minute,
-        );
-      });
+    } catch (e) {
+      debugPrint('Error opening date picker modal: $e');
     }
   }
 
@@ -482,9 +739,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     DropdownButtonFormField<String>(
                       initialValue: _selectedWalletId,
                       items: wallets.map((w) {
+                        final txs = (context.read<TransactionsCubit>().state is TransactionsLoaded)
+                            ? (context.read<TransactionsCubit>().state as TransactionsLoaded).transactions.where((t) => t.walletId == w.id).toList()
+                            : <TransactionModel>[];
+                        final bal = BalanceCalculator.calculateWalletBalance(
+                          openingBalance: w.openingBalance,
+                          transactions: txs,
+                        );
                         return DropdownMenuItem<String>(
                           value: w.id,
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               CircleAvatar(
                                 radius: 12,
@@ -496,7 +761,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              Text(w.name),
+                              Text(w.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              const SizedBox(width: 10),
+                              Text(
+                                '(${AppConstants.formatCurrency(bal, w.currencyCode)})',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: bal < 0 ? Colors.red : Colors.grey.shade600,
+                                ),
+                              ),
                             ],
                           ),
                         );
@@ -579,19 +853,58 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.withValues(alpha: 0.4)),
+                          color: Theme.of(context).cardColor,
+                          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today_rounded, size: 20, color: Colors.grey),
-                            const SizedBox(width: 12),
-                            Text(
-                              'التاريخ والوقت: ${AppConstants.formatDate(_selectedDate)}  ${AppConstants.formatTime(_selectedDate)}',
-                              style: const TextStyle(fontSize: 14),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.calendar_month_rounded,
+                                size: 20,
+                                color: AppTheme.primaryColor,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'التاريخ والوقت',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${AppConstants.formatDate(_selectedDate)}  •  ${AppConstants.formatTime(_selectedDate)}',
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                ),
+                              ],
                             ),
                             const Spacer(),
-                            const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'تغيير',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                  SizedBox(width: 2),
+                                  Icon(Icons.keyboard_arrow_down_rounded, size: 16),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),

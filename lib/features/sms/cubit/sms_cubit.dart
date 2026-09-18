@@ -1,5 +1,4 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:uuid/uuid.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/data/repositories/transaction_repository.dart';
@@ -103,17 +102,36 @@ class SmsCubit extends Cubit<SmsState> {
       // 1. Sort items chronologically (oldest first, newest last)
       selectedItems.sort((a, b) => a.data.date.compareTo(b.data.date));
 
-      final Map<String, double> latestBalancesByWallet = {};
-
       for (final item in selectedItems) {
         final walletId = item.targetWalletId;
         if (walletId == null) continue;
 
-        if (item.data.balance != null) {
-          latestBalancesByWallet[walletId] = item.data.balance!;
-        }
-
         if (item.data.isBalanceOnly) {
+          if (!transactionRepository.isDuplicateSms(
+            smsKey: item.data.smsKey,
+            referenceNumber: item.data.referenceNumber,
+            rawSmsBody: item.data.rawBody,
+            walletId: walletId,
+            amount: 0.0,
+            type: 'adjustment',
+            date: item.data.date,
+          )) {
+            final tx = TransactionModel(
+              id: 'sms_${item.data.smsKey}',
+              walletId: walletId,
+              type: 'adjustment',
+              amount: 0.0,
+              category: 'كشف حساب',
+              note: item.data.rawBody,
+              date: item.data.date,
+              source: 'sms',
+              smsKey: item.data.smsKey,
+              createdAt: DateTime.now(),
+              rawSmsBody: item.data.rawBody,
+              rawSmsSender: item.data.rawSender,
+            );
+            await transactionRepository.saveTransaction(tx);
+          }
           count++;
         } else {
           // Check for duplicates before saving
@@ -130,7 +148,7 @@ class SmsCubit extends Cubit<SmsState> {
           }
 
           final tx = TransactionModel(
-            id: const Uuid().v4(),
+            id: 'sms_${item.data.smsKey}',
             walletId: walletId,
             type: item.data.type,
             amount: item.data.amount,
@@ -149,32 +167,11 @@ class SmsCubit extends Cubit<SmsState> {
         }
       }
 
-      // 2. Reconcile each wallet ONCE with its newest verified bank balance
-      for (final entry in latestBalancesByWallet.entries) {
-        final walletId = entry.key;
-        final targetBalance = entry.value;
-        final freshWallet = wRepo.getWalletById(walletId);
-        if (freshWallet != null) {
-          final txs = transactionRepository.getTransactionsByWallet(walletId);
-          double txSum = 0.0;
-          for (final t in txs) {
-            if (t.type == 'income') {
-              txSum += t.amount;
-            } else if (t.type == 'expense') {
-              txSum -= t.amount;
-            } else if (t.type == 'adjustment') {
-              txSum += t.amount;
-            }
-          }
-          final targetOpening = targetBalance - txSum;
-          if ((targetOpening - freshWallet.openingBalance).abs() >= 0.01) {
-            final updatedWallet = freshWallet.copyWith(
-              openingBalance: targetOpening,
-            );
-            await wRepo.saveWallet(updatedWallet);
-          }
-        }
-      }
+      // 2. Reconcile wallets with their latest verified bank statement balances
+      await smsService.reconcileWalletsWithLatestSms(
+        transactionRepository: transactionRepository,
+        walletRepository: wRepo,
+      );
 
       emit(SmsImportSuccess(count));
       return count;
@@ -207,17 +204,37 @@ class SmsCubit extends Cubit<SmsState> {
       final sortedItems = List<SmsCandidateItem>.from(items)
         ..sort((a, b) => a.data.date.compareTo(b.data.date));
 
-      final Map<String, double> latestBalancesByWallet = {};
-
       for (final item in sortedItems) {
         final walletId = item.targetWalletId;
         if (walletId == null) continue;
 
-        if (item.data.balance != null) {
-          latestBalancesByWallet[walletId] = item.data.balance!;
-        }
-
         if (item.data.isBalanceOnly) {
+          if (!transactionRepository.isDuplicateSms(
+            smsKey: item.data.smsKey,
+            referenceNumber: item.data.referenceNumber,
+            rawSmsBody: item.data.rawBody,
+            walletId: walletId,
+            amount: 0.0,
+            type: 'adjustment',
+            date: item.data.date,
+          )) {
+            final tx = TransactionModel(
+              id: 'sms_${item.data.smsKey}',
+              walletId: walletId,
+              type: 'adjustment',
+              amount: 0.0,
+              category: 'كشف حساب',
+              note: item.data.rawBody,
+              date: item.data.date,
+              source: 'sms',
+              smsKey: item.data.smsKey,
+              createdAt: DateTime.now(),
+              rawSmsBody: item.data.rawBody,
+              rawSmsSender: item.data.rawSender,
+            );
+            await transactionRepository.saveTransaction(tx);
+          }
+          importedItems.add(item);
           count++;
         } else {
           // Check for duplicates before saving
@@ -234,7 +251,7 @@ class SmsCubit extends Cubit<SmsState> {
           }
 
           final tx = TransactionModel(
-            id: const Uuid().v4(),
+            id: 'sms_${item.data.smsKey}',
             walletId: walletId,
             type: item.data.type,
             amount: item.data.amount,
@@ -254,32 +271,11 @@ class SmsCubit extends Cubit<SmsState> {
         }
       }
 
-      // 2. Reconcile each wallet ONCE with its newest verified bank balance
-      for (final entry in latestBalancesByWallet.entries) {
-        final walletId = entry.key;
-        final targetBalance = entry.value;
-        final freshWallet = wRepo.getWalletById(walletId);
-        if (freshWallet != null) {
-          final txs = transactionRepository.getTransactionsByWallet(walletId);
-          double txSum = 0.0;
-          for (final t in txs) {
-            if (t.type == 'income') {
-              txSum += t.amount;
-            } else if (t.type == 'expense') {
-              txSum -= t.amount;
-            } else if (t.type == 'adjustment') {
-              txSum += t.amount;
-            }
-          }
-          final targetOpening = targetBalance - txSum;
-          if ((targetOpening - freshWallet.openingBalance).abs() >= 0.01) {
-            final updatedWallet = freshWallet.copyWith(
-              openingBalance: targetOpening,
-            );
-            await wRepo.saveWallet(updatedWallet);
-          }
-        }
-      }
+      // 2. Reconcile wallets with their latest verified bank statement balances
+      await smsService.reconcileWalletsWithLatestSms(
+        transactionRepository: transactionRepository,
+        walletRepository: wRepo,
+      );
 
       if (count > 0) {
         final prefs = await SharedPreferences.getInstance();

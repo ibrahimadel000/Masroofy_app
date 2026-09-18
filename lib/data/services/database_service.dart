@@ -1,4 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 
@@ -45,6 +46,10 @@ class DatabaseService {
   static Future<void> switchUser(String? userId) async {
     final sanitizedId = sanitizeUserId(userId);
     _currentUserId = sanitizedId;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('current_user_id', sanitizedId);
+    } catch (_) {}
 
     if (!_isHiveInitialized) {
       // Hive has not been initialized (e.g. lightweight widget unit tests).

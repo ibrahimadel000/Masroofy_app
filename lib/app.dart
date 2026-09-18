@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/core/router/app_router.dart';
@@ -130,6 +131,16 @@ class MizaanApp extends StatelessWidget {
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
               themeMode: themeMode,
+              locale: const Locale('ar'),
+              supportedLocales: const [
+                Locale('ar'),
+                Locale('en'),
+              ],
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
               builder: (context, child) {
                 final mediaQuery = MediaQuery.of(context);
                 final clampedMediaQuery = mediaQuery.copyWith(

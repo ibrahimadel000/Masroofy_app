@@ -58,6 +58,8 @@ class TransactionsCubit extends Cubit<TransactionsState> {
       emit(TransactionsLoading());
       final list = repository.getTransactions();
       emit(TransactionsLoaded(list));
+      // Asynchronously prune any duplicate records from disk and Firestore
+      repository.cleanDuplicateTransactions();
     } catch (e) {
       emit(TransactionsError('فشل تحميل الحركات: $e'));
     }

@@ -201,5 +201,21 @@ void main() {
       expect(matchedUnknown, isNotNull);
       expect(matchedUnknown!.id, 'w_2'); // isFavorite = true
     });
+
+    test('Kuraimi Purchase SMS parses correctly as expense and reduces balance offline', () {
+      const kuraimiPurchaseSms = 'تم خصم مبلغ YER 100.00 مقابل مشترياتك من 1588993 المرجع: 54177667';
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: 'Kuraimi',
+        body: kuraimiPurchaseSms,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.type, 'expense');
+      expect(parsed.amount, 100.0);
+      expect(parsed.category, 'بقالة');
+      expect(parsed.referenceNumber, '54177667');
+      expect(parsed.balance, isNull); // Purchase SMS doesn't include remaining balance
+    });
   });
 }

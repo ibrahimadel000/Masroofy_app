@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:mizaan/core/constants/sms_senders.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/services/database_service.dart';
 
@@ -62,13 +63,113 @@ class TransactionRepository {
     }
   }
 
+  /// Normalize any text for robust semantic comparison (removes whitespace, punctuation, normalizes digits)
+  static String normalizeBodyForComparison(String? text) {
+    if (text == null || text.trim().isEmpty) return '';
+    return SmsSenderRegistry.normalizeDigits(text)
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s\r\n\t,.:\-_/\\|]+'), '')
+        .trim();
+  }
+
+  /// Deduplicate a list of transactions in memory ensuring each real operation appears only once
+  static List<TransactionModel> deduplicateList(List<TransactionModel> rawList) {
+    if (rawList.length <= 1) return rawList;
+
+    final List<TransactionModel> uniqueList = [];
+    final Set<String> seenIds = {};
+    final Set<String> seenRefs = {};
+    final Set<String> seenKeys = {};
+
+    for (final tx in rawList) {
+      if (seenIds.contains(tx.id)) continue;
+
+      bool isDup = false;
+
+      // 1. Match by reference number (100% unique bank ID)
+      final ref = tx.referenceNumber;
+      if (ref != null && ref.isNotEmpty) {
+        if (seenRefs.contains(ref)) {
+          isDup = true;
+        } else {
+          seenRefs.add(ref);
+        }
+      }
+
+      // 2. Match by smsKey
+      if (!isDup && tx.smsKey != null && tx.smsKey!.isNotEmpty) {
+        if (seenKeys.contains(tx.smsKey)) {
+          isDup = true;
+        } else {
+          seenKeys.add(tx.smsKey!);
+        }
+      }
+
+      // 3. Match by semantic SMS content or matching manual notes
+      if (!isDup) {
+        final normText = normalizeBodyForComparison(tx.rawSmsBody ?? tx.note);
+
+        for (final accepted in uniqueList) {
+          if (accepted.walletId == tx.walletId &&
+              accepted.type == tx.type &&
+              (accepted.amount - tx.amount).abs() < 0.01) {
+            // If both have SMS/note content, compare normalized text
+            if (normText.isNotEmpty) {
+              final acceptedNorm = normalizeBodyForComparison(accepted.rawSmsBody ?? accepted.note);
+              if (acceptedNorm.isNotEmpty && acceptedNorm == normText) {
+                isDup = true;
+                break;
+              }
+            }
+
+            // If either is SMS and occurred on the same calendar day
+            final isSms = tx.source == 'sms' ||
+                accepted.source == 'sms' ||
+                tx.rawSmsBody != null ||
+                accepted.rawSmsBody != null;
+
+            if (isSms) {
+              final d1 = tx.date.toLocal();
+              final d2 = accepted.date.toLocal();
+              if (d1.year == d2.year && d1.month == d2.month && d1.day == d2.day) {
+                final diff = d1.difference(d2).abs();
+                if (diff.inHours <= 12) {
+                  isDup = true;
+                  break;
+                }
+              }
+            } else {
+              // Purely manual: only consider duplicate if within 5 minutes and same note
+              final diff = accepted.date.difference(tx.date).abs();
+              if (diff.inMinutes <= 5 && accepted.note == tx.note) {
+                isDup = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (!isDup) {
+        seenIds.add(tx.id);
+        uniqueList.add(tx);
+      }
+    }
+
+    return uniqueList;
+  }
+
   List<TransactionModel> getTransactions() {
     try {
       final box = _safeBox;
       if (box == null) return [];
       final list = box.values.toList();
-      list.sort((a, b) => b.date.compareTo(a.date));
-      return list;
+      list.sort((a, b) {
+        final cmp = b.date.compareTo(a.date);
+        if (cmp != 0) return cmp;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      return deduplicateList(list);
     } catch (_) {
       return [];
     }
@@ -89,8 +190,12 @@ class TransactionRepository {
       final box = _safeBox;
       if (box == null) return [];
       final list = box.values.where((tx) => tx.walletId == walletId).toList();
-      list.sort((a, b) => b.date.compareTo(a.date));
-      return list;
+      list.sort((a, b) {
+        final cmp = b.date.compareTo(a.date);
+        if (cmp != 0) return cmp;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      return deduplicateList(list);
     } catch (_) {
       return [];
     }
@@ -147,21 +252,23 @@ class TransactionRepository {
         }
       }
 
-      final cleanBody = rawSmsBody?.replaceAll(RegExp(r'\s+'), ' ').trim();
+      // 3. Match by normalized SMS body / note (IDENTICAL SMS BODY)
+      final normBody = normalizeBodyForComparison(rawSmsBody);
 
       for (final tx in allTxs) {
         if (tx.walletId == walletId &&
             tx.type == type &&
             (tx.amount - amount).abs() < 0.01) {
-          // Compare date within 2 hours
-          final diff = tx.date.difference(date).abs();
-          if (diff.inHours <= 2) {
-            if (cleanBody != null && tx.rawSmsBody != null) {
-              final txClean = tx.rawSmsBody!.replaceAll(RegExp(r'\s+'), ' ').trim();
-              if (txClean == cleanBody) return true;
-            } else if (diff.inMinutes <= 15) {
-              return true;
-            }
+          if (normBody.isNotEmpty) {
+            final txNorm = normalizeBodyForComparison(tx.rawSmsBody ?? tx.note);
+            if (txNorm.isNotEmpty && txNorm == normBody) return true;
+          }
+
+          final d1 = date.toLocal();
+          final d2 = tx.date.toLocal();
+          if (d1.year == d2.year && d1.month == d2.month && d1.day == d2.day) {
+            final diff = d1.difference(d2).abs();
+            if (diff.inHours <= 12) return true;
           }
         }
       }
@@ -180,76 +287,21 @@ class TransactionRepository {
       final all = box.values.toList();
       if (all.length <= 1) return 0;
 
+      // Sort by createdAt so we keep the first saved transaction
+      all.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+      final unique = deduplicateList(all);
+      final uniqueIds = unique.map((t) => t.id).toSet();
+
+      final toDelete = all.where((t) => !uniqueIds.contains(t.id)).toList();
+      if (toDelete.isEmpty) return 0;
+
       int removedCount = 0;
-      final Set<String> seenRefs = {};
-      final Set<String> seenKeys = {};
-      final List<String> toDeleteIds = [];
-
-    // Sort by date descending (keep the earliest or latest stable copy)
-    all.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-    final List<TransactionModel> kept = [];
-
-    for (final tx in all) {
-      bool isDup = false;
-
-      // 1. Check reference number
-      final ref = tx.referenceNumber;
-      if (ref != null && ref.isNotEmpty) {
-        if (seenRefs.contains(ref)) {
-          isDup = true;
-        } else {
-          seenRefs.add(ref);
-        }
+      for (final tx in toDelete) {
+        await deleteTransaction(tx.id);
+        removedCount++;
       }
-
-      // 2. Check smsKey
-      if (!isDup && tx.smsKey != null && tx.smsKey!.isNotEmpty) {
-        if (seenKeys.contains(tx.smsKey)) {
-          isDup = true;
-        } else {
-          seenKeys.add(tx.smsKey!);
-        }
-      }
-
-      // 3. Check semantic duplicate against already kept transactions
-      if (!isDup) {
-        final cleanBody = tx.rawSmsBody?.replaceAll(RegExp(r'\s+'), ' ').trim() ??
-            tx.note?.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-        for (final k in kept) {
-          if (k.walletId == tx.walletId &&
-              k.type == tx.type &&
-              (k.amount - tx.amount).abs() < 0.01) {
-            final diff = k.date.difference(tx.date).abs();
-            if (diff.inMinutes <= 30) {
-              final kClean = k.rawSmsBody?.replaceAll(RegExp(r'\s+'), ' ').trim() ??
-                  k.note?.replaceAll(RegExp(r'\s+'), ' ').trim();
-              if (cleanBody != null && kClean != null && cleanBody == kClean) {
-                isDup = true;
-                break;
-              } else if (diff.inMinutes <= 5) {
-                isDup = true;
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      if (isDup) {
-        toDeleteIds.add(tx.id);
-      } else {
-        kept.add(tx);
-      }
-    }
-
-    for (final id in toDeleteIds) {
-      await deleteTransaction(id);
-      removedCount++;
-    }
-
-    return removedCount;
+      return removedCount;
     } catch (_) {
       return 0;
     }
@@ -320,6 +372,7 @@ class TransactionRepository {
           await saveSmsKey(tx.smsKey!);
         }
       }
+      await cleanDuplicateTransactions();
     } catch (_) {
       // Offline fallback
     }
