@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/core/constants/sms_senders.dart';
 import 'package:mizaan/core/router/app_router.dart';
@@ -33,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _smsNotificationsEnabled = true;
   bool _manualTxNotificationsEnabled = true;
   bool _systemNotificationsGranted = true;
+  bool _isBatteryOptimizationIgnored = false;
   double _lowBalanceThreshold = 10000.0;
 
   @override
@@ -40,6 +42,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _loadPreferences();
     _checkPermissionStatus();
+    _checkBatteryStatus();
+  }
+
+  Future<void> _checkBatteryStatus() async {
+    if (Platform.isAndroid) {
+      final status = await Permission.ignoreBatteryOptimizations.isGranted;
+      if (mounted) setState(() => _isBatteryOptimizationIgnored = status);
+    }
   }
 
   Future<void> _checkPermissionStatus() async {
@@ -170,6 +180,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _requestBatteryOptimizationExemption() async {
+    if (!Platform.isAndroid) return;
+    final status = await Permission.ignoreBatteryOptimizations.status;
+    if (!status.isGranted) {
+      final result = await Permission.ignoreBatteryOptimizations.request();
+      final isGranted = result.isGranted;
+      if (mounted) {
+        setState(() => _isBatteryOptimizationIgnored = isGranted);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isGranted
+                ? 'تم إلغاء قيود البطارية! سيعمل التسجيل بالخلفية بدقة وبدون توقف ⚡'
+                : 'يرجى اختيار "بلا قيود / Unrestricted" في إعدادات بطارية الهاتف.'),
+            backgroundColor: isGranted ? AppTheme.primaryColor : Colors.amber.shade800,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('قيود البطارية ملغاة بالفعل! التطبيق يستمع للرسائل في الخلفية دائماً.'),
+            backgroundColor: AppTheme.primaryColor,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _toggleManualTxNotifications(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_userKey('manualTxNotificationsEnabled'), value);
@@ -182,52 +221,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await notif.requestPermission();
         _checkPermissionStatus();
       }
-    }
-  }
-
-  Future<void> _sendTestNotification() async {
-    final notif = NotificationService();
-    final success = await notif.showTestNotification();
-    if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text('تم إرسال الإشعار! اسحب شريط إشعارات الهاتف العلوي لرؤيته.'),
-                ),
-              ],
-            ),
-            backgroundColor: AppTheme.primaryColor,
-            duration: Duration(seconds: 4),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.white),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text('إشعارات التطبيق معطلة في إعدادات الهاتف.'),
-                ),
-              ],
-            ),
-            action: SnackBarAction(
-              label: 'فتح الإعدادات',
-              textColor: Colors.amber,
-              onPressed: () => notif.openSettings(),
-            ),
-            backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-      _checkPermissionStatus();
     }
   }
 
@@ -570,27 +563,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           _buildCard([
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withAlpha(25),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.send_to_mobile_rounded, color: AppTheme.primaryColor),
-              ),
-              title: const Text(
-                'إرسال إشعار تجريبي للهاتف',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: const Text(
-                'اضغط هنا لتجربة ورؤية الإشعار ينبثق فوراً في شريط هاتفك العلوي',
-                style: TextStyle(fontSize: 12),
-              ),
-              trailing: const Icon(Icons.chevron_left_rounded),
-              onTap: _sendTestNotification,
-            ),
-            const Divider(height: 1),
             SwitchListTile(
               activeThumbColor: AppTheme.primaryColor,
               secondary: const Icon(Icons.receipt_long_rounded, color: AppTheme.primaryColor),
@@ -654,6 +626,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 value: _smsNotificationsEnabled,
                 onChanged: _toggleSmsNotifications,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Icon(
+                  _isBatteryOptimizationIgnored ? Icons.bolt_rounded : Icons.battery_alert_rounded,
+                  color: _isBatteryOptimizationIgnored ? Colors.green : Colors.amber.shade700,
+                ),
+                title: const Text('الاستماع في الخلفية (إلغاء قيود البطارية)'),
+                subtitle: Text(
+                  _isBatteryOptimizationIgnored
+                      ? 'الاستماع بالخلفية مُفعّل بدون قيود من النظام (يعمل والتطبيق مغلق)'
+                      : 'مهم جداً: اضغط هنا للسماح بالعمل الدائم في الخلفية وتسجيل الحركات',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _isBatteryOptimizationIgnored ? Colors.green.shade700 : Colors.amber.shade900,
+                  ),
+                ),
+                trailing: _isBatteryOptimizationIgnored
+                    ? const Icon(Icons.check_circle_rounded, color: Colors.green)
+                    : TextButton(
+                        onPressed: _requestBatteryOptimizationExemption,
+                        child: const Text('سماح'),
+                      ),
+                onTap: _requestBatteryOptimizationExemption,
               ),
               const Divider(height: 1),
               ListTile(

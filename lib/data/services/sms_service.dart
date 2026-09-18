@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -126,6 +127,9 @@ class SmsService {
           OrderBy(SmsColumn.DATE, sort: Sort.DESC),
         ],
       );
+
+      // CRITICAL FIX: Sort descending by date in Dart to overcome Android ContentResolver sorting bugs
+      messages.sort((a, b) => (b.date ?? 0).compareTo(a.date ?? 0));
 
       final candidates = messages.take(maxCount);
 
@@ -331,6 +335,124 @@ class SmsService {
     }
   }
 
+  static const String pendingSmsQueueKey = 'mizaan_pending_background_sms_queue_v1';
+
+  /// Enqueue an incoming background SMS into SharedPreferences queue for cross-isolate safety
+  static Future<void> enqueuePendingSms({
+    required String sender,
+    required String body,
+    required int timestamp,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(pendingSmsQueueKey) ?? [];
+      final itemJson = jsonEncode({
+        'sender': sender,
+        'body': body,
+        'date': timestamp,
+      });
+      if (!list.contains(itemJson)) {
+        list.add(itemJson);
+        await prefs.setStringList(pendingSmsQueueKey, list);
+      }
+    } catch (_) {}
+  }
+
+  /// Drain the pending background SMS queue and record transactions in the main isolate
+  static Future<int> flushPendingBackgroundSms({
+    TransactionRepository? transactionRepository,
+    WalletRepository? walletRepository,
+    NotificationService? notificationService,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(pendingSmsQueueKey);
+      if (list == null || list.isEmpty) return 0;
+
+      final txRepo = transactionRepository ?? TransactionRepository();
+      final walletRepo = walletRepository ?? WalletRepository();
+      final userWallets = walletRepo.getWallets();
+      if (userWallets.isEmpty) return 0;
+
+      int flushedCount = 0;
+      final remainingList = <String>[];
+
+      for (final rawJson in list) {
+        try {
+          final map = jsonDecode(rawJson) as Map<String, dynamic>;
+          final sender = map['sender'] as String? ?? '';
+          final body = map['body'] as String? ?? '';
+          final dateMs = map['date'] as int? ?? DateTime.now().millisecondsSinceEpoch;
+          final date = DateTime.fromMillisecondsSinceEpoch(dateMs);
+
+          final template = SmsSenderRegistry.findTemplate(sender);
+          if (template == null) continue;
+
+          final parsed = SmsSenderRegistry.parseMessage(
+            sender: sender,
+            body: body,
+            date: date,
+          );
+          if (parsed == null) continue;
+
+          final matchedWallet = findMatchingWallet(
+            userWallets: userWallets,
+            walletType: parsed.walletType,
+            template: template,
+          );
+          if (matchedWallet == null) {
+            remainingList.add(rawJson);
+            continue;
+          }
+
+          if (txRepo.isDuplicateSms(
+            smsKey: parsed.smsKey,
+            referenceNumber: parsed.referenceNumber,
+            rawSmsBody: parsed.rawBody,
+            walletId: matchedWallet.id,
+            amount: parsed.amount,
+            type: parsed.type,
+            date: parsed.date,
+          )) {
+            continue;
+          }
+
+          final tx = TransactionModel(
+            id: 'sms_${parsed.smsKey}',
+            walletId: matchedWallet.id,
+            type: parsed.type,
+            amount: parsed.amount,
+            category: parsed.category,
+            note: parsed.rawBody,
+            date: parsed.date,
+            source: 'sms',
+            smsKey: parsed.smsKey,
+            createdAt: DateTime.now(),
+            rawSmsBody: parsed.rawBody,
+            rawSmsSender: parsed.rawSender,
+          );
+          await txRepo.saveTransaction(tx);
+          flushedCount++;
+        } catch (_) {
+          remainingList.add(rawJson);
+        }
+      }
+
+      await prefs.setStringList(pendingSmsQueueKey, remainingList);
+
+      if (flushedCount > 0) {
+        await const SmsService().reconcileWalletsWithLatestSms(
+          transactionRepository: txRepo,
+          walletRepository: walletRepo,
+        );
+      }
+
+      return flushedCount;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   /// Process an incoming message in the background isolate
   static Future<TransactionModel?> processBackgroundIncomingSms(SmsMessage message) async {
     WidgetsFlutterBinding.ensureInitialized();
@@ -353,10 +475,31 @@ class SmsService {
       );
       if (parsed == null) return null;
 
+      // 1. Cross-isolate safety: Always enqueue to SharedPreferences queue
+      await enqueuePendingSms(
+        sender: sender,
+        body: body,
+        timestamp: date.millisecondsSinceEpoch,
+      );
+
       if (_inFlightKeys.contains(parsed.smsKey)) return null;
       _inFlightKeys.add(parsed.smsKey);
       Future.delayed(const Duration(seconds: 5), () => _inFlightKeys.remove(parsed.smsKey));
 
+      // 2. Immediate local notification to user
+      try {
+        final notifService = NotificationService();
+        await notifService.init();
+        await sendTransactionNotification(
+          notificationService: notifService,
+          data: parsed,
+          walletName: template.walletNameAr,
+          currencyCode: 'YER',
+          currentWalletBalance: parsed.balance,
+        );
+      } catch (_) {}
+
+      // 3. Attempt direct Hive write if isolate has access
       if (!DatabaseService.isInitialized) {
         final prefs = await SharedPreferences.getInstance();
         final uid = prefs.getString('current_user_id') ?? 'guest';
@@ -389,79 +532,27 @@ class SmsService {
         return null;
       }
 
-      final walletName = matchedWallet.name;
-      final currencyCode = matchedWallet.currencyCode;
+      final tx = TransactionModel(
+        id: 'sms_${parsed.smsKey}',
+        walletId: matchedWalletId,
+        type: parsed.type,
+        amount: parsed.amount,
+        category: parsed.category,
+        note: parsed.rawBody,
+        date: parsed.date,
+        source: 'sms',
+        smsKey: parsed.smsKey,
+        createdAt: DateTime.now(),
+        rawSmsBody: parsed.rawBody,
+        rawSmsSender: parsed.rawSender,
+      );
 
-      TransactionModel? tx;
+      await txRepo.saveTransaction(tx);
 
-      if (parsed.isBalanceOnly) {
-        tx = TransactionModel(
-          id: 'sms_${parsed.smsKey}',
-          walletId: matchedWalletId,
-          type: 'adjustment',
-          amount: 0.0,
-          category: 'كشف حساب',
-          note: parsed.rawBody,
-          date: parsed.date,
-          source: 'sms',
-          smsKey: parsed.smsKey,
-          createdAt: DateTime.now(),
-          rawSmsBody: parsed.rawBody,
-          rawSmsSender: parsed.rawSender,
-        );
-        await txRepo.saveTransaction(tx);
+      if (parsed.balance != null) {
         await const SmsService().reconcileWalletsWithLatestSms(
           transactionRepository: txRepo,
           walletRepository: walletRepo,
-        );
-      } else {
-        tx = TransactionModel(
-          id: 'sms_${parsed.smsKey}',
-          walletId: matchedWalletId,
-          type: parsed.type,
-          amount: parsed.amount,
-          category: parsed.category,
-          note: parsed.rawBody,
-          date: parsed.date,
-          source: 'sms',
-          smsKey: parsed.smsKey,
-          createdAt: DateTime.now(),
-          rawSmsBody: parsed.rawBody,
-          rawSmsSender: parsed.rawSender,
-        );
-
-        await txRepo.saveTransaction(tx);
-
-        if (parsed.balance != null) {
-          await const SmsService().reconcileWalletsWithLatestSms(
-            transactionRepository: txRepo,
-            walletRepository: walletRepo,
-          );
-        }
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      final uid = DatabaseService.currentUserId ?? 'guest';
-      final notifEnabled = prefs.getBool('${uid}_smsNotificationsEnabled') ??
-          prefs.getBool('smsNotificationsEnabled') ??
-          true;
-
-      if (notifEnabled) {
-        final notifService = NotificationService();
-        await notifService.init();
-        final freshWallet = walletRepo.getWalletById(matchedWalletId) ?? matchedWallet;
-        final currentTxs = txRepo.getTransactionsByWallet(matchedWalletId);
-        final currentBal = BalanceCalculator.calculateWalletBalance(
-          openingBalance: freshWallet.openingBalance,
-          transactions: currentTxs,
-        );
-
-        await sendTransactionNotification(
-          notificationService: notifService,
-          data: parsed,
-          walletName: walletName,
-          currencyCode: currencyCode,
-          currentWalletBalance: currentBal,
         );
       }
 

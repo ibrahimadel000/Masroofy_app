@@ -13,6 +13,7 @@ import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/transactions/screens/add_transaction_screen.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/features/favorites/screens/favorites_screen.dart';
@@ -50,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (Platform.isAndroid) {
         _initSmsListenerAndPermissions();
         _triggerAutoImportIfEnabled();
+        _checkBatteryOptimizationPromptOnce();
       } else {
         _runStartupDuplicateCleanupAndReconcile();
       }
@@ -154,10 +156,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _checkBatteryOptimizationPromptOnce() async {
+    if (!Platform.isAndroid || Platform.environment.containsKey('FLUTTER_TEST')) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final requested = prefs.getBool('battery_opt_prompt_shown') ?? false;
+      if (!requested) {
+        await prefs.setBool('battery_opt_prompt_shown', true);
+        final status = await Permission.ignoreBatteryOptimizations.status;
+        if (!status.isGranted) {
+          await Permission.ignoreBatteryOptimizations.request();
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> _triggerAutoImportIfEnabled() async {
-    // 1. Clean existing duplicates first
+    // 1. Flush any pending background SMS queue first
+    final flushed = await SmsService.flushPendingBackgroundSms(
+      transactionRepository: TransactionRepository(),
+      walletRepository: WalletRepository(),
+      notificationService: NotificationService(),
+    );
+
+    // 2. Clean existing duplicates
     final cleaned = await TransactionRepository().cleanDuplicateTransactions();
-    if (cleaned > 0 && mounted) {
+    if ((flushed > 0 || cleaned > 0) && mounted) {
       context.read<TransactionsCubit>().loadTransactions();
       context.read<WalletsCubit>().loadWallets();
       context.read<StatsCubit>().loadStats();
@@ -169,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         prefs.getBool('smsAutoImportEnabled') ??
         true;
 
+    int importedCount = 0;
     if (autoImportEnabled && mounted) {
       final walletsState = context.read<WalletsCubit>().state;
       List<Wallet> wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
@@ -176,32 +201,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         wallets = WalletRepository().getWallets();
       }
       if (wallets.isNotEmpty) {
-        final importedCount = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+        importedCount = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
         if (importedCount > 0 && mounted) {
           context.read<TransactionsCubit>().loadTransactions();
           context.read<WalletsCubit>().loadWallets();
           context.read<StatsCubit>().loadStats();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: AppTheme.primaryColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              content: Row(
-                children: [
-                  const Icon(Icons.mark_email_read_rounded, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text('تم استيراد $importedCount حركات تلقائياً وتحديث المحفظة 📩'),
-                  ),
-                ],
-              ),
-            ),
-          );
         }
       }
     }
 
-    // 2. Reconcile wallets with the latest bank SMS statement balance
+    // 3. Reconcile wallets with the latest bank SMS statement balance
     final reconciled = await const SmsService().reconcileWalletsWithLatestSms(
       transactionRepository: TransactionRepository(),
       walletRepository: WalletRepository(),
@@ -209,6 +218,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (reconciled > 0 && mounted) {
       context.read<WalletsCubit>().loadWallets();
       context.read<StatsCubit>().loadStats();
+    }
+
+    final totalNew = flushed + importedCount;
+    if (totalNew > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(
+            children: [
+              const Icon(Icons.mark_email_read_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('تم استيراد $totalNew حركات وتحديث الرصيد الإجمالي تلقائياً 📩'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
@@ -390,23 +419,40 @@ class _HomeMainView extends StatelessWidget {
 
             return RefreshIndicator(
               onRefresh: () async {
-                await TransactionRepository().cleanDuplicateTransactions();
-                await const SmsService().reconcileWalletsWithLatestSms(
+                final flushed = await SmsService.flushPendingBackgroundSms(
                   transactionRepository: TransactionRepository(),
                   walletRepository: WalletRepository(),
+                  notificationService: NotificationService(),
                 );
+                await TransactionRepository().cleanDuplicateTransactions();
+                int imported = 0;
                 if (Platform.isAndroid && context.mounted) {
                   final wallets = context.read<WalletsCubit>().state is WalletsLoaded
                       ? (context.read<WalletsCubit>().state as WalletsLoaded).wallets
                       : <Wallet>[];
                   if (wallets.isNotEmpty) {
-                    await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+                    imported = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
                   }
                 }
+                await const SmsService().reconcileWalletsWithLatestSms(
+                  transactionRepository: TransactionRepository(),
+                  walletRepository: WalletRepository(),
+                );
                 if (context.mounted) {
                   context.read<WalletsCubit>().loadWallets();
                   context.read<TransactionsCubit>().loadTransactions();
                   context.read<StatsCubit>().loadStats();
+                  final totalUpdated = flushed + imported;
+                  if (totalUpdated > 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppTheme.primaryColor,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        content: Text('تم استيراد $totalUpdated حركات وتحديث الرصيد الإجمالي ✅'),
+                      ),
+                    );
+                  }
                 }
               },
               child: SingleChildScrollView(

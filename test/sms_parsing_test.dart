@@ -415,5 +415,145 @@ void main() {
       final norm2 = TransactionRepository.normalizeBodyForComparison('تم تحويل 4,100.00 لحساب خليل الرحمن \r\n 945.30 YER رصيدك');
       expect(norm1, norm2);
     });
+
+    test('Deduplication: Two separate purchases of the same amount on the same day are NOT dropped', () {
+      final purchase1 = TransactionModel(
+        id: 'tx_buy_1',
+        walletId: 'kuraimi_1',
+        type: 'expense',
+        amount: 500.0,
+        category: 'بقالة',
+        note: 'تم سداد مشترياتك عبر حاسب 500 YER المرجع: 101',
+        rawSmsBody: 'تم سداد مشترياتك عبر حاسب 500 YER المرجع: 101',
+        date: DateTime(2026, 9, 17, 10, 0),
+        source: 'sms',
+        createdAt: DateTime(2026, 9, 17, 10, 0),
+      );
+
+      final purchase2 = TransactionModel(
+        id: 'tx_buy_2',
+        walletId: 'kuraimi_1',
+        type: 'expense',
+        amount: 500.0,
+        category: 'بقالة',
+        note: 'تم سداد مشترياتك عبر حاسب 500 YER المرجع: 102',
+        rawSmsBody: 'تم سداد مشترياتك عبر حاسب 500 YER المرجع: 102',
+        date: DateTime(2026, 9, 17, 14, 30), // Same day, different purchase!
+        source: 'sms',
+        createdAt: DateTime(2026, 9, 17, 14, 30),
+      );
+
+      final result = TransactionRepository.deduplicateList([purchase1, purchase2]);
+      expect(result.length, 2, reason: 'Both legitimate purchases of 500 YER must be kept');
+    });
+
+    test('Kuraimi Haseb purchase SMS parsing (Expense 500.0 YER with Reference)', () {
+      const sender = 'Haseb';
+      const body = 'تم سداد مشترياتك عبر خدمة حاسب بمبلغ 500 YER لدى سوبرماركت الهدى المرجع: 556677';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 500.0);
+      expect(parsed.referenceNumber, '556677');
+      expect(parsed.category, 'بقالة');
+    });
+
+    test('Kuraimi POS purchase SMS parsing (Expense 350.00 YER with Balance)', () {
+      const sender = 'KuraimiMB';
+      const body = 'تمت عملية شراء عبر نقاط البيع بمبلغ 350.00 YER رصيدك 4,200.00 YER المرجع: 998877';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 350.0);
+      expect(parsed.balance, 4200.0);
+      expect(parsed.referenceNumber, '998877');
+      expect(parsed.category, 'بقالة');
+    });
+
+    test('Kuraimi Arabic sender "الكريمي" purchase SMS parsing', () {
+      const sender = 'الكريمي';
+      const body = 'تم شراء بمبلغ 1200 ر.ي من محطة السلام رصيدك 18000 ر.ي رقم العملية: 443322';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 1200.0);
+      expect(parsed.balance, 18000.0);
+      expect(parsed.referenceNumber, '443322');
+    });
+
+    test('OneCash wallet purchase and transfer parsing', () {
+      const sender = 'OneCash';
+      const body = 'تمت عملية شراء بمبلغ 1,500 ريال لدى متجر النور رصيدك الحالي 25,000 ريال مرجع: 778899';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'onecash');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 1500.0);
+      expect(parsed.balance, 25000.0);
+      expect(parsed.referenceNumber, '778899');
+    });
+
+    test('Al-Amqi wallet SMS parsing', () {
+      const sender = 'AlAmqi';
+      const body = 'تم تحويل مبلغ 8000 ريال الى حساب سالم رصيدك 42000 ريال رقم الاشعار 12345';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'alamqi');
+      expect(parsed.type, 'expense');
+      expect(parsed.amount, 8000.0);
+      expect(parsed.balance, 42000.0);
+      expect(parsed.referenceNumber, '12345');
+    });
+
+    test('Floosak wallet SMS parsing', () {
+      const sender = 'Floosak';
+      const body = 'تم استلام حوالة بمبلغ 10000 ريال من احمد رصيدك المتاح 35000 ريال رقم العملية: 98765';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'floosak');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 10000.0);
+      expect(parsed.balance, 35000.0);
+      expect(parsed.referenceNumber, '98765');
+    });
   });
 }

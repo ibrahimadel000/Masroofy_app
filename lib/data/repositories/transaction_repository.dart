@@ -122,23 +122,12 @@ class TransactionRepository {
               }
             }
 
-            // If either is SMS and occurred on the same calendar day
             final isSms = tx.source == 'sms' ||
                 accepted.source == 'sms' ||
                 tx.rawSmsBody != null ||
                 accepted.rawSmsBody != null;
 
-            if (isSms) {
-              final d1 = tx.date.toLocal();
-              final d2 = accepted.date.toLocal();
-              if (d1.year == d2.year && d1.month == d2.month && d1.day == d2.day) {
-                final diff = d1.difference(d2).abs();
-                if (diff.inHours <= 12) {
-                  isDup = true;
-                  break;
-                }
-              }
-            } else {
+            if (!isSms) {
               // Purely manual: only consider duplicate if within 5 minutes and same note
               final diff = accepted.date.difference(tx.date).abs();
               if (diff.inMinutes <= 5 && accepted.note == tx.note) {
@@ -255,20 +244,13 @@ class TransactionRepository {
       // 3. Match by normalized SMS body / note (IDENTICAL SMS BODY)
       final normBody = normalizeBodyForComparison(rawSmsBody);
 
-      for (final tx in allTxs) {
-        if (tx.walletId == walletId &&
-            tx.type == type &&
-            (tx.amount - amount).abs() < 0.01) {
-          if (normBody.isNotEmpty) {
+      if (normBody.isNotEmpty) {
+        for (final tx in allTxs) {
+          if (tx.walletId == walletId &&
+              tx.type == type &&
+              (tx.amount - amount).abs() < 0.01) {
             final txNorm = normalizeBodyForComparison(tx.rawSmsBody ?? tx.note);
             if (txNorm.isNotEmpty && txNorm == normBody) return true;
-          }
-
-          final d1 = date.toLocal();
-          final d2 = tx.date.toLocal();
-          if (d1.year == d2.year && d1.month == d2.month && d1.day == d2.day) {
-            final diff = d1.difference(d2).abs();
-            if (diff.inHours <= 12) return true;
           }
         }
       }

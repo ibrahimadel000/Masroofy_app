@@ -170,59 +170,68 @@ class SmsSenderRegistry {
 
   static final List<WalletSmsTemplate> defaultTemplates = [
     // 1. Kuraimi Bank (الكريمي)
-    // Real SMS samples:
-    // "أودع/عادل عبدالواحد لحسابك50,000.00 YER 51,245.30YERرصيدك"
-    // "تم سداد 200.00 جوال 772004664 رصيدك YER 51,045.30"
-    // "تم تحويل1,100.00لحساب خليل الرحمن رصيدك1,445.30YER"
-    // "تم خصم مبلغ YER 100.00 مقابل مشترياتك من 1588993 المرجع: 54177667"
-    // "أودع/ابراهيم عادل عبدالواحد الشرجبي لحسابك مبلغ 100 رصيدك YER 4045.3"
+    // Supports: Haseb (حاسب), POS (نقاط البيع), merchant purchases, mobile bills, transfers, ATM, deposits, salary
     WalletSmsTemplate(
       walletType: 'kuraimi',
       walletNameAr: 'الكريمي',
-      senderIds: ['KuraimiMB', 'KuraimiIMB', 'Kuraimi', 'KURAIMI', 'الكريمي'],
+      senderIds: [
+        'KuraimiMB',
+        'KuraimiIMB',
+        'Kuraimi',
+        'KURAIMI',
+        'الكريمي',
+        'Al-Kuraimi',
+        'AlKuraimi',
+        'KuraimiPay',
+        'Haseb',
+        'حاسب',
+        'KIMB',
+        'KuraimiBank',
+      ],
       incomePatterns: [
-        RegExp(r'[أا]ودع[\s\S]*?لحسابك\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
-        RegExp(r'(?:إيداع|ايداع|تم استلام|تم إيداع|تحويل وارد|حوالة واردة)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
+        RegExp(r'[أا]ودع[\s\S]*?لحسابك\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false, dotAll: true),
+        RegExp(r'(?:إيداع|ايداع|تم استلام|تم إيداع|تحويل وارد|حوالة واردة|أضيف|اضيف)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false, dotAll: true),
       ],
       expensePatterns: [
-        RegExp(r'(?:تم سداد|سداد)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
-        RegExp(r'(?:تم تحويل|تحويل)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
-        RegExp(r'(?:تم خصم|خصم)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
-        RegExp(r'(?:تم سحب|سحب)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
-        RegExp(r'(?:تم شراء|شراء|مشتريات)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        // 1. Purchase / Haseb / POS with explicit amount prefix (highest precision)
+        RegExp(r'(?:شراء|مشتريات|مشترياتك|حاسب|خدمة\s*حاسب|نقاط\s*البيع|نقطة\s*بيع|pos|دفع)[\s\S]*?(?:ب?مبلغ|ب?قيمة)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false),
+        // 2. Deduction with explicit amount or merchant
+        RegExp(r'(?:تم\s*خصم|خصم|قيد\s*خصم)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false),
+        // 3. Purchase / Shopping direct
+        RegExp(r'(?:تمت?\s*عملية\s*شراء|تم\s*شراء|شراء|مشتريات|مشترياتك|حاسب)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false),
+        // 4. Payment / Bill settlement / Phone recharge
+        RegExp(r'(?:تم\s*سداد|سداد|تم\s*دفع|دفع)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false),
+        // 5. Transfer out
+        RegExp(r'(?:تم\s*تحويل|تحويل)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false),
+        // 6. Cash withdrawal
+        RegExp(r'(?:تم\s*سحب|سحب)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false),
       ],
       balancePatterns: [
-        // 1. Suffix with YER/currency attached: "945.30YERرصيدك", "5,045.30YERرصيدك", "1,445.30YERرصيدك"
-        // Note: Currency is strictly REQUIRED before "رصيدك" to avoid capturing phone numbers or amounts preceding "رصيدك"
-        RegExp(r'([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)\s*رصيدك', caseSensitive: false),
-        // 2. Prefix with optional currency/words: "رصيدك هو 945.30", "رصيدك YER 4045.3", "رصيدك: 945.30", "رصيدك1,445.30YER"
-        RegExp(r'رصيدك\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        // 1. Prefix with optional currency/words: "رصيدك هو 945.30", "رصيدك YER 4045.3", "رصيدك: 945.30", "رصيدك 4,200.00 YER", "رصيدك1,445.30YER"
+        RegExp(r'رصيدك\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        // 2. Suffix with YER/currency attached: "945.30YERرصيدك", "5,045.30YERرصيدك", "1,445.30YERرصيدك"
+        RegExp(r'([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)\s*رصيدك', caseSensitive: false),
         // 3. Currency before number with suffix: "YER 2,545.30 رصيدك"
-        RegExp(r'(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)\s*([0-9,]+(?:\.[0-9]+)?)\s*رصيدك', caseSensitive: false),
+        RegExp(r'(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)\s*([0-9,]+(?:\.[0-9]+)?)\s*رصيدك', caseSensitive: false),
         // 4. Combined: "51,245.30YERرصيدك"
-        RegExp(r'(?:YER\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|ر\.?ي)+\s*رصيدك', caseSensitive: false),
+        RegExp(r'(?:YER\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|ر\.?ي|ريال)+\s*رصيدك', caseSensitive: false),
         // 5. Explicit account statement inquiry
-        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
     ),
 
     // 2. Jaib Wallet (جيب - بنك التضامن)
-    // Real SMS samples:
-    // "اضيف 500ر.ي تحويل مشترك رص:5680ر.ي من سام النزيلي-781563420"
-    // "خصم 250ر.ي رص:4330ر.ي للرقم 772004664 سداد يمن موبايل"
-    // "خصم 100ر.ي رص:4230ر.ي للرقم 772004664 سداد يمن موبايل"
-    // "اضيف 450ر.ي تحويل مشترك رص:480ر.ي من اروى القباطي-777161829"
     WalletSmsTemplate(
       walletType: 'jeeb',
       walletNameAr: 'جيب',
-      senderIds: ['Jaib', 'JAIB', 'jaib', 'Jeeb', 'JEEB', 'جيب'],
+      senderIds: ['Jaib', 'JAIB', 'jaib', 'Jeeb', 'JEEB', 'جيب', 'Tadhamon', 'TIB'],
       incomePatterns: [
-        RegExp(r'[أا]ضيف\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:ر\.?ي|YER|SAR|USD|\$)?', caseSensitive: false),
+        RegExp(r'[أا]ضيف[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:ر\.?ي|YER|SAR|USD|\$)?', caseSensitive: false),
         RegExp(r'(?:إيداع|ايداع|تم استلام|تحويل وارد|حوالة واردة)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
       ],
       expensePatterns: [
-        RegExp(r'(?:تم خصم|خصم)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:ر\.?ي|YER|SAR|USD|\$)?', caseSensitive: false),
-        RegExp(r'(?:تم سداد|سداد|تم تحويل|تحويل|تم شراء|شراء|مشتريات)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'(?:تم\s*خصم|خصم)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?([0-9,]+(?:\.[0-9]+)?)\s*(?:ر\.?ي|YER|SAR|USD|\$)?', caseSensitive: false),
+        RegExp(r'(?:تم\s*سداد|سداد|تم\s*تحويل|تحويل|تم\s*شراء|شراء|مشتريات|تم\s*دفع|دفع)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
       balancePatterns: [
         RegExp(r'رص:\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:ر\.?ي|YER)?', caseSensitive: false),
@@ -240,7 +249,7 @@ class SmsSenderRegistry {
         RegExp(r'(?:إيداع|ايداع|تم استلام|تم إيداع|أودع|اودع|اضيف|أضيف|تحويل وارد|حوالة واردة)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
       ],
       expensePatterns: [
-        RegExp(r'(?:خصم|تم خصم|تم سداد|تم تحويل|سداد|سحب|تم سحب|تم شراء|شراء|مشتريات)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'(?:خصم|تم\s*خصم|تم\s*سداد|تم\s*تحويل|سداد|سحب|تم\s*سحب|تم\s*شراء|شراء|مشتريات|دفع|تم\s*دفع)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
       balancePatterns: [
         RegExp(r'رصيدك[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
@@ -253,12 +262,12 @@ class SmsSenderRegistry {
     WalletSmsTemplate(
       walletType: 'muhafazati',
       walletNameAr: 'محفظتي',
-      senderIds: ['Muhafazati', 'MTN', 'Spacetel', 'محفظتي'],
+      senderIds: ['Muhafazati', 'MTN', 'Spacetel', 'محفظتي', 'YOU', 'يو'],
       incomePatterns: [
         RegExp(r'(?:تم استلام|إيداع|ايداع|تمت إضافة|أضيف|اضيف)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
       ],
       expensePatterns: [
-        RegExp(r'(?:تم خصم|خصم|تم تحويل|تم سداد|سداد|شراء|مشتريات|تم شراء)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'(?:تم\s*خصم|خصم|تم\s*تحويل|تم\s*سداد|سداد|شراء|مشتريات|تم\s*شراء|دفع|تم\s*دفع)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
       balancePatterns: [
         RegExp(r'رصيدك[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
@@ -271,17 +280,71 @@ class SmsSenderRegistry {
     WalletSmsTemplate(
       walletType: 'jawali',
       walletNameAr: 'جوالي',
-      senderIds: ['Jawali', 'YemenMobile', 'CACBank', 'CAC_Bank', 'جوالي'],
+      senderIds: ['Jawali', 'YemenMobile', 'CACBank', 'CAC_Bank', 'جوالي', 'CAC'],
       incomePatterns: [
         RegExp(r'(?:إيداع|ايداع|تم استلام|تحويل لحسابك|أودع|اودع|اضيف|أضيف)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
       ],
       expensePatterns: [
-        RegExp(r'(?:تم خصم|خصم|تم سداد|سداد فاتورة|سداد|تم تحويل|سحب|شراء|مشتريات|تم شراء)\s*(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'(?:تم\s*خصم|خصم|تم\s*سداد|سداد فاتورة|سداد|تم\s*تحويل|سحب|شراء|مشتريات|تم\s*شراء|دفع|تم\s*دفع)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
       ],
       balancePatterns: [
         RegExp(r'رصيدك[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
         RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
         RegExp(r'(?:الرصيد|رصيدك)\s*(?:الحالي\s*)?[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+      ],
+    ),
+
+    // 6. OneCash (ون كاش - بنك القطيبي)
+    WalletSmsTemplate(
+      walletType: 'onecash',
+      walletNameAr: 'ون كاش',
+      senderIds: ['OneCash', 'ONECASH', 'onecash', 'ون كاش', 'القطيبي', 'AlQutaibi', 'Qutaibi'],
+      incomePatterns: [
+        RegExp(r'(?:إيداع|ايداع|تم استلام|تم إيداع|أودع|اودع|اضيف|أضيف|تحويل وارد|حوالة واردة)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
+      ],
+      expensePatterns: [
+        RegExp(r'(?:خصم|تم\s*خصم|تم\s*سداد|تم\s*تحويل|سداد|سحب|تم\s*سحب|تم\s*شراء|شراء|مشتريات|دفع|تم\s*دفع)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+      ],
+      balancePatterns: [
+        RegExp(r'(?:الرصيد|رصيدك|رصيد)\s*(?:الحالي|المتاح|المتبقي|الفعلي|هو)?[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)\s*رصيدك', caseSensitive: false),
+      ],
+    ),
+
+    // 7. Al-Amqi (العمقي للصرافة)
+    WalletSmsTemplate(
+      walletType: 'alamqi',
+      walletNameAr: 'العمقي',
+      senderIds: ['AlAmqi', 'Alamqi', 'ALAMQI', 'العمقي', 'AMQI', 'Amqi'],
+      incomePatterns: [
+        RegExp(r'(?:إيداع|ايداع|تم استلام|تم إيداع|أودع|اودع|اضيف|أضيف|تحويل وارد|حوالة واردة)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
+      ],
+      expensePatterns: [
+        RegExp(r'(?:خصم|تم\s*خصم|تم\s*سداد|تم\s*تحويل|سداد|سحب|تم\s*سحب|تم\s*شراء|شراء|مشتريات|دفع|تم\s*دفع)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+      ],
+      balancePatterns: [
+        RegExp(r'(?:الرصيد|رصيدك|رصيد)\s*(?:الحالي|المتاح|المتبقي|الفعلي|هو)?[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)\s*رصيدك', caseSensitive: false),
+      ],
+    ),
+
+    // 8. Floosak (فلوسك - بنك اليمن والبحرين الشامل)
+    WalletSmsTemplate(
+      walletType: 'floosak',
+      walletNameAr: 'فلوسك',
+      senderIds: ['Floosak', 'FLOOSAK', 'floosak', 'فلوسك', 'YBR'],
+      incomePatterns: [
+        RegExp(r'(?:إيداع|ايداع|تم استلام|تم إيداع|أودع|اودع|اضيف|أضيف|تحويل وارد|حوالة واردة)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false, dotAll: true),
+      ],
+      expensePatterns: [
+        RegExp(r'(?:خصم|تم\s*خصم|تم\s*سداد|تم\s*تحويل|سداد|سحب|تم\s*سحب|تم\s*شراء|شراء|مشتريات|دفع|تم\s*دفع)[\s\S]*?(?:(?:ب?مبلغ|ب?قيمة)\s*)?(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+      ],
+      balancePatterns: [
+        RegExp(r'(?:الرصيد|رصيدك|رصيد)\s*(?:الحالي|المتاح|المتبقي|الفعلي|هو)?[:\s]*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'رصيد\s*(?:حسابك)?(?:\s+في\s+[^\d]+)?\s*(?:هو|:)?\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)?\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+        RegExp(r'([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|ريال|\$)\s*رصيدك', caseSensitive: false),
       ],
     ),
   ];
@@ -337,19 +400,6 @@ class SmsSenderRegistry {
   /// Guess transaction category based on message content
   static String guessCategory(String body) {
     final text = body.toLowerCase();
-    if (text.contains('سداد') ||
-        text.contains('جوال') ||
-        text.contains('يمن موبايل') ||
-        text.contains('سبأفون') ||
-        text.contains('يو') ||
-        text.contains('فاتورة') ||
-        text.contains('فواتير') ||
-        text.contains('كهرباء') ||
-        text.contains('مياه') ||
-        text.contains('نت') ||
-        text.contains('انترنت')) {
-      return 'فواتير';
-    }
     if (text.contains('مطعم') ||
         text.contains('كافيه') ||
         text.contains('وجبة') ||
@@ -364,6 +414,7 @@ class SmsSenderRegistry {
         text.contains('ماركت') ||
         text.contains('تموينات') ||
         text.contains('مشتريات') ||
+        text.contains('حاسب') ||
         text.contains('شراء') ||
         text.contains('متجر') ||
         text.contains('مركز') ||
@@ -372,6 +423,19 @@ class SmsSenderRegistry {
         text.contains('نقطة بيع') ||
         text.contains('pos')) {
       return 'بقالة';
+    }
+    if (text.contains('سداد') ||
+        text.contains('جوال') ||
+        text.contains('يمن موبايل') ||
+        text.contains('سبأفون') ||
+        text.contains('يو') ||
+        text.contains('فاتورة') ||
+        text.contains('فواتير') ||
+        text.contains('كهرباء') ||
+        text.contains('مياه') ||
+        text.contains('نت') ||
+        text.contains('انترنت')) {
+      return 'فواتير';
     }
     if (text.contains('تاكسي') ||
         text.contains('باص') ||
@@ -398,7 +462,7 @@ class SmsSenderRegistry {
   /// Extract bank reference number from SMS body if present
   static String? extractReferenceNumber(String body) {
     final patterns = [
-      RegExp(r'(?:المرجع|مرجع|ref(?:erence)?|رقم العملية|رقم المرجع|رقم الحوالة)[\s:]*([0-9a-zA-Z]+)', caseSensitive: false),
+      RegExp(r'(?:المرجع|مرجع|ref(?:erence)?|رقم\s*العملية|رقم\s*المرجع|رقم\s*الحوالة|رقم\s*[إا]شعار|رقم\s*ال[إا]شعار|ال[إا]شعار|[إا]شعار\s*رقم|رقم\s*السند|رقم\s*الحركة|عملية\s*رقم|حركة\s*رقم)[\s:]*([0-9a-zA-Z]+)', caseSensitive: false),
     ];
     for (final p in patterns) {
       final match = p.firstMatch(body);
@@ -503,6 +567,49 @@ class SmsSenderRegistry {
               amount = parsed;
               type = 'expense';
               break;
+            }
+          }
+        }
+      }
+    }
+
+    // Pass 2.5: Resilient Fallback Parser for Bank SMS with non-standard formatting
+    if (amount == null || type == null) {
+      final isExp = textWithoutBalance.contains('خصم') ||
+          textWithoutBalance.contains('شراء') ||
+          textWithoutBalance.contains('مشتريات') ||
+          textWithoutBalance.contains('سداد') ||
+          textWithoutBalance.contains('دفع') ||
+          textWithoutBalance.contains('حاسب') ||
+          textWithoutBalance.contains('سحب');
+
+      final isInc = textWithoutBalance.contains('أودع') ||
+          textWithoutBalance.contains('اودع') ||
+          textWithoutBalance.contains('إيداع') ||
+          textWithoutBalance.contains('ايداع') ||
+          textWithoutBalance.contains('أضيف') ||
+          textWithoutBalance.contains('اضيف') ||
+          textWithoutBalance.contains('استلام') ||
+          textWithoutBalance.contains('تحويل وارد');
+
+      if (isExp || isInc) {
+        final fallbackPatterns = [
+          RegExp(r'(?:ب?مبلغ|ب?قيمة)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)?', caseSensitive: false),
+          RegExp(r'(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false),
+          RegExp(r'([0-9,]+(?:\.[0-9]+)?)\s*(?:YER|SAR|USD|ر\.?ي|ر\.?س|\$)', caseSensitive: false),
+        ];
+
+        for (final p in fallbackPatterns) {
+          final m = p.firstMatch(textWithoutBalance);
+          if (m != null && m.groupCount >= 1) {
+            final raw = m.group(1);
+            if (raw != null) {
+              final parsedVal = parseAmount(raw);
+              if (parsedVal != null && parsedVal > 0) {
+                amount = parsedVal;
+                type = isExp ? 'expense' : 'income';
+                break;
+              }
             }
           }
         }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
@@ -5,6 +6,11 @@ import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
+import 'package:mizaan/data/repositories/transaction_repository.dart';
+import 'package:mizaan/data/repositories/wallet_repository.dart';
+import 'package:mizaan/data/services/notification_service.dart';
+import 'package:mizaan/data/services/sms_service.dart';
+import 'package:mizaan/features/sms/cubit/sms_cubit.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/transactions/screens/add_transaction_screen.dart';
 import 'package:mizaan/features/transactions/widgets/transaction_detail_sheet.dart';
@@ -43,6 +49,37 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleRefresh(BuildContext context) async {
+    if (Platform.isAndroid && context.mounted) {
+      final walletsState = context.read<WalletsCubit>().state;
+      final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+      final flushed = await SmsService.flushPendingBackgroundSms(
+        transactionRepository: TransactionRepository(),
+        walletRepository: WalletRepository(),
+        notificationService: NotificationService(),
+      );
+      int imported = 0;
+      if (wallets.isNotEmpty && context.mounted) {
+        imported = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+      }
+      final total = flushed + imported;
+      if (total > 0 && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppTheme.primaryColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Text('تم استيراد $total حركات جديدة بنجاح 📩'),
+          ),
+        );
+      }
+    }
+    if (context.mounted) {
+      context.read<TransactionsCubit>().loadTransactions();
+      context.read<WalletsCubit>().loadWallets();
+    }
   }
 
   List<TransactionModel> _filterTransactions(List<TransactionModel> allTx) {
@@ -148,15 +185,18 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
 
                 // Transaction Groups List
                 Expanded(
-                  child: filtered.isEmpty
-                      ? _buildEmptyState(allTransactions.isEmpty)
-                      : RefreshIndicator(
-                          onRefresh: () async {
-                            context.read<TransactionsCubit>().loadTransactions();
-                            context.read<WalletsCubit>().loadWallets();
-                          },
-                          child: _buildGroupedList(filtered, wallets),
-                        ),
+                  child: RefreshIndicator(
+                    onRefresh: () => _handleRefresh(context),
+                    child: filtered.isEmpty
+                        ? SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: SizedBox(
+                              height: 400,
+                              child: _buildEmptyState(allTransactions.isEmpty),
+                            ),
+                          )
+                        : _buildGroupedList(filtered, wallets),
+                  ),
                 ),
               ],
             ),

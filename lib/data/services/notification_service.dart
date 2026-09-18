@@ -165,62 +165,6 @@ class NotificationService {
     }
   }
 
-  /// Send an instant test notification to verify system phone notifications
-  Future<bool> showTestNotification() async {
-    try {
-      if (!_isInitialized) await init();
-
-      final hasPerm = await hasPermission();
-      if (!hasPerm) {
-        final requested = await requestPermission();
-        if (!requested) return false;
-      }
-
-      const androidDetails = AndroidNotificationDetails(
-        transactionsChannelId,
-        transactionsChannelName,
-        channelDescription: transactionsChannelDesc,
-        importance: Importance.max,
-        priority: Priority.high,
-        icon: '@mipmap/launcher_icon',
-        playSound: true,
-        enableVibration: true,
-        enableLights: true,
-        channelShowBadge: true,
-        ticker: 'إشعار تجريبي من ميزان',
-        styleInformation: BigTextStyleInformation(
-          'تهانينا! إشعارات ميزان تعمل بنجاح وتظهر في شريط إشعارات هاتفك.',
-          contentTitle: '🔔 إشعار تجريبي من ميزان',
-          summaryText: 'ميزان',
-        ),
-      );
-
-      const darwinDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
-
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: darwinDetails,
-      );
-
-      final notifId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await _plugin.show(
-        notifId,
-        '🔔 إشعار تجريبي من ميزان',
-        'تهانينا! إشعارات ميزان تعمل بنجاح وتظهر في شريط إشعارات هاتفك.',
-        details,
-        payload: 'test_notification',
-      );
-      return true;
-    } catch (e) {
-      debugPrint('showTestNotification error: $e');
-      return false;
-    }
-  }
-
   /// Show low balance alert notification
   Future<void> showLowBalanceAlert({
     required String walletName,
