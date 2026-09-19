@@ -36,9 +36,12 @@ class NotificationService {
   static const String transactionsChannelName = 'حركات المحافظ والرسائل';
   static const String transactionsChannelDesc = 'إشعارات فورية بالعمليات المالية والمشتريات والإيداعات المستلمة';
 
-  /// Initialize notifications for Android and iOS
   Future<void> init() async {
     if (_isInitialized) return;
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+      _isInitialized = true;
+      return;
+    }
     try {
       const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
       const darwinSettings = DarwinInitializationSettings(
@@ -171,6 +174,7 @@ class NotificationService {
     required double currentBalance,
     required double threshold,
   }) async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
     try {
       if (!_isInitialized) await init();
       final fmt = NumberFormat('#,##0.##', 'ar');
@@ -219,6 +223,7 @@ class NotificationService {
 
   /// Schedule daily reminder at 21:00 (or daily repeat)
   Future<void> scheduleDailyReminder() async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
     try {
       if (!_isInitialized) await init();
       const androidDetails = AndroidNotificationDetails(
@@ -259,6 +264,7 @@ class NotificationService {
 
   /// Cancel daily reminder
   Future<void> cancelDailyReminder() async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
     try {
       await _plugin.cancel(dailyReminderNotificationId);
     } catch (e) {
@@ -272,6 +278,7 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
     try {
       if (!_isInitialized) await init();
 

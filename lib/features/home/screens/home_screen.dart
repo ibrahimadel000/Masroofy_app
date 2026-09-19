@@ -13,7 +13,6 @@ import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/transactions/screens/add_transaction_screen.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/features/favorites/screens/favorites_screen.dart';
@@ -30,6 +29,8 @@ import 'package:mizaan/data/services/sms_service.dart';
 import 'package:mizaan/features/stats/cubit/stats_cubit.dart';
 import 'package:mizaan/features/transactions/screens/transactions_history_screen.dart';
 import 'package:mizaan/features/transactions/widgets/transaction_detail_sheet.dart';
+import 'package:mizaan/features/home/widgets/new_user_hints_card.dart';
+import 'package:mizaan/features/home/widgets/app_hints_modal.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -41,17 +42,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentTabIndex = 0;
   bool _isOffline = false;
+  bool _isGuideDismissed = false;
   Timer? _connectivityTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadGuideDismissedState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (Platform.isAndroid) {
         _initSmsListenerAndPermissions();
         _triggerAutoImportIfEnabled();
-        _checkBatteryOptimizationPromptOnce();
       } else {
         _runStartupDuplicateCleanupAndReconcile();
       }
@@ -67,6 +69,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _loadGuideDismissedState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() {
+          _isGuideDismissed = prefs.getBool('dismissed_new_user_guide') ?? false;
+        });
+      }
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _connectivityTimer?.cancel();
@@ -78,7 +91,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkConnectivity();
+      _loadGuideDismissedState();
       if (Platform.isAndroid) {
+        _initSmsListenerAndPermissions();
         _triggerAutoImportIfEnabled();
       }
     }
@@ -98,6 +113,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         transactionRepository: txRepo,
         walletRepository: walletRepo,
         notificationService: notif,
+        requestIfNotGranted: false,
         onTransactionReceived: (TransactionModel tx) {
           if (mounted) {
             context.read<TransactionsCubit>().loadTransactions();
@@ -152,26 +168,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           true;
       if (reminder) {
         await notif.scheduleDailyReminder();
+      } else {
+        await notif.cancelDailyReminder();
       }
     }
   }
 
-  Future<void> _checkBatteryOptimizationPromptOnce() async {
-    if (!Platform.isAndroid || Platform.environment.containsKey('FLUTTER_TEST')) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final requested = prefs.getBool('battery_opt_prompt_shown') ?? false;
-      if (!requested) {
-        await prefs.setBool('battery_opt_prompt_shown', true);
-        final status = await Permission.ignoreBatteryOptimizations.status;
-        if (!status.isGranted) {
-          await Permission.ignoreBatteryOptimizations.request();
-        }
-      }
-    } catch (_) {}
-  }
 
   Future<void> _triggerAutoImportIfEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = DatabaseService.currentUserId ?? 'guest';
+    final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
+        prefs.getBool('smsAutoImportEnabled') ??
+        true;
+
+    if (!autoImportEnabled) return;
+
     // 1. Flush any pending background SMS queue first
     final flushed = await SmsService.flushPendingBackgroundSms(
       transactionRepository: TransactionRepository(),
@@ -187,14 +199,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context.read<StatsCubit>().loadStats();
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final uid = DatabaseService.currentUserId ?? 'guest';
-    final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
-        prefs.getBool('smsAutoImportEnabled') ??
-        true;
-
     int importedCount = 0;
-    if (autoImportEnabled && mounted) {
+    if (mounted) {
       final walletsState = context.read<WalletsCubit>().state;
       List<Wallet> wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
       if (wallets.isEmpty) {
@@ -270,6 +276,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
         actions: [
+          // Hints & User Guide Icon
+          IconButton(
+            icon: const Icon(Icons.lightbulb_outline_rounded, color: AppTheme.primaryColor),
+            tooltip: 'دليل وتلميحات ميزان',
+            onPressed: () => AppHintsModal.show(context),
+          ),
           // Android-only SMS Quick Sync button in AppBar
           if (Platform.isAndroid)
             Padding(
@@ -379,6 +391,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case 0:
         return _HomeMainView(
           onNavigateToTransactions: () => setState(() => _currentTabIndex = 1),
+          isGuideDismissed: _isGuideDismissed,
+          onDismissGuide: () => setState(() => _isGuideDismissed = true),
+          onPermissionUpdated: () => _initSmsListenerAndPermissions(),
         );
       case 1:
         return const TransactionsHistoryScreen(isEmbedded: true);
@@ -391,6 +406,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       default:
         return _HomeMainView(
           onNavigateToTransactions: () => setState(() => _currentTabIndex = 1),
+          isGuideDismissed: _isGuideDismissed,
+          onDismissGuide: () => setState(() => _isGuideDismissed = true),
+          onPermissionUpdated: () => _initSmsListenerAndPermissions(),
         );
     }
   }
@@ -398,8 +416,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
 class _HomeMainView extends StatelessWidget {
   final VoidCallback onNavigateToTransactions;
+  final bool isGuideDismissed;
+  final VoidCallback onDismissGuide;
+  final VoidCallback onPermissionUpdated;
 
-  const _HomeMainView({required this.onNavigateToTransactions});
+  const _HomeMainView({
+    required this.onNavigateToTransactions,
+    required this.isGuideDismissed,
+    required this.onDismissGuide,
+    required this.onPermissionUpdated,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -419,25 +445,35 @@ class _HomeMainView extends StatelessWidget {
 
             return RefreshIndicator(
               onRefresh: () async {
-                final flushed = await SmsService.flushPendingBackgroundSms(
-                  transactionRepository: TransactionRepository(),
-                  walletRepository: WalletRepository(),
-                  notificationService: NotificationService(),
-                );
-                await TransactionRepository().cleanDuplicateTransactions();
+                final prefs = await SharedPreferences.getInstance();
+                final uid = DatabaseService.currentUserId ?? 'guest';
+                final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
+                    prefs.getBool('smsAutoImportEnabled') ??
+                    true;
+
+                int flushed = 0;
                 int imported = 0;
-                if (Platform.isAndroid && context.mounted) {
-                  final wallets = context.read<WalletsCubit>().state is WalletsLoaded
-                      ? (context.read<WalletsCubit>().state as WalletsLoaded).wallets
-                      : <Wallet>[];
-                  if (wallets.isNotEmpty) {
-                    imported = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+                if (autoImportEnabled) {
+                  flushed = await SmsService.flushPendingBackgroundSms(
+                    transactionRepository: TransactionRepository(),
+                    walletRepository: WalletRepository(),
+                    notificationService: NotificationService(),
+                  );
+                  await TransactionRepository().cleanDuplicateTransactions();
+                  if (Platform.isAndroid && context.mounted) {
+                    final wallets = context.read<WalletsCubit>().state is WalletsLoaded
+                        ? (context.read<WalletsCubit>().state as WalletsLoaded).wallets
+                        : <Wallet>[];
+                    if (wallets.isNotEmpty) {
+                      imported = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+                    }
                   }
+                  await const SmsService().reconcileWalletsWithLatestSms(
+                    transactionRepository: TransactionRepository(),
+                    walletRepository: WalletRepository(),
+                  );
                 }
-                await const SmsService().reconcileWalletsWithLatestSms(
-                  transactionRepository: TransactionRepository(),
-                  walletRepository: WalletRepository(),
-                );
+
                 if (context.mounted) {
                   context.read<WalletsCubit>().loadWallets();
                   context.read<TransactionsCubit>().loadTransactions();
@@ -464,6 +500,16 @@ class _HomeMainView extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // New User Guide & Hints Card
+                      if (!isGuideDismissed) ...[
+                        NewUserHintsCard(
+                          walletCount: wallets.length,
+                          onDismiss: onDismissGuide,
+                          onPermissionUpdated: onPermissionUpdated,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+
                       // 1. Total Balance Card
                       _buildTotalBalanceCard(totalsByCurrency, todaySpending),
 

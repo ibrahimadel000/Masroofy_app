@@ -187,6 +187,13 @@ class SmsCubit extends Cubit<SmsState> {
     Map<String, String>? customMappings,
   }) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final uid = DatabaseService.currentUserId ?? 'guest';
+      final autoImport = prefs.getBool('${uid}_smsAutoImportEnabled') ??
+          prefs.getBool('smsAutoImportEnabled') ??
+          true;
+      if (!autoImport) return 0;
+
       final hasPerm = await smsService.hasPermission();
       if (!hasPerm) return 0;
 

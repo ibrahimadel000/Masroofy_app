@@ -61,6 +61,36 @@ class _AddWalletScreenState extends State<AddWalletScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Smart SMS Matching Hint Banner
+                Container(
+                  margin: const EdgeInsets.only(bottom: 18),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.blue.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.lightbulb_outline_rounded, color: Colors.blue.shade700, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'تلميح: اختيار نوع مطابق للبنك أو المحفظة (مثل الكريمي، ون كاش، محفظتي) يسمح لميزان بربط الرسائل بها وتحديث رصيدها تلقائياً ⚡',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white70
+                                : Colors.blue.shade900,
+                            fontFamily: 'Cairo',
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 // Preview Card
                 Container(
                   padding: const EdgeInsets.all(20),

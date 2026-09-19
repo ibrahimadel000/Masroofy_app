@@ -40,10 +40,19 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Broadcast receiver for background SMS listening (telephony) -->
+        <!-- High-priority Native SMS Broadcast Receiver for instant background notifications -->
+        <receiver
+            android:name="com.mizaan.app.SmsReceiver"
+            android:permission="android.permission.BROADCAST_SMS"
+            android:exported="true">
+            <intent-filter android:priority="1000">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Secondary telephony receiver without the blocking BROADCAST_SMS permission -->
         <receiver
             android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
-            android:permission="android.permission.BROADCAST_SMS"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />

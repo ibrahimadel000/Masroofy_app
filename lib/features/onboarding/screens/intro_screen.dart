@@ -41,6 +41,13 @@ class _IntroScreenState extends State<IntroScreen> {
       description:
           'استيراد ذكي للحركات المالية من رسائل الـ SMS تلقائياً مع تنبيهات عند انخفاض الرصيد وتقارير دقيقة.',
     ),
+    _IntroSlideData(
+      icon: Icons.security_rounded,
+      title: 'أمانك وخصوصيتك أولويتنا 🔒',
+      description:
+          'نقرأ فقط إشعارات البنوك محلياً داخل هاتفك وبدون إنترنت. لا نصل لمحادثاتك الشخصية، وبياناتك المالية مشفرة وملكك وحدك.',
+      badges: ['خصوصية محلية 100%', 'بدون رفع لسيرفرات', 'خفيف على البطارية'],
+    ),
   ];
 
   @override
@@ -160,6 +167,39 @@ class _IntroScreenState extends State<IntroScreen> {
                                 height: 1.5,
                               ),
                             ),
+                            if (slide.badges != null && slide.badges!.isNotEmpty) ...[
+                              const SizedBox(height: 20),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                alignment: WrapAlignment.center,
+                                children: slide.badges!.map((b) => Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.primaryColor),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        b,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )).toList(),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -238,10 +278,12 @@ class _IntroSlideData {
   final IconData icon;
   final String title;
   final String description;
+  final List<String>? badges;
 
   const _IntroSlideData({
     required this.icon,
     required this.title,
     required this.description,
+    this.badges,
   });
 }

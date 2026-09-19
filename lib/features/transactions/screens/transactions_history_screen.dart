@@ -10,6 +10,8 @@ import 'package:mizaan/data/repositories/transaction_repository.dart';
 import 'package:mizaan/data/repositories/wallet_repository.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/data/services/sms_service.dart';
+import 'package:mizaan/data/services/database_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/features/sms/cubit/sms_cubit.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/transactions/screens/add_transaction_screen.dart';
@@ -53,27 +55,36 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
 
   Future<void> _handleRefresh(BuildContext context) async {
     if (Platform.isAndroid && context.mounted) {
-      final walletsState = context.read<WalletsCubit>().state;
-      final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
-      final flushed = await SmsService.flushPendingBackgroundSms(
-        transactionRepository: TransactionRepository(),
-        walletRepository: WalletRepository(),
-        notificationService: NotificationService(),
-      );
-      int imported = 0;
-      if (wallets.isNotEmpty && context.mounted) {
-        imported = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
-      }
-      final total = flushed + imported;
-      if (total > 0 && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppTheme.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            content: Text('تم استيراد $total حركات جديدة بنجاح 📩'),
-          ),
+      final prefs = await SharedPreferences.getInstance();
+      final uid = DatabaseService.currentUserId ?? 'guest';
+      final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
+          prefs.getBool('smsAutoImportEnabled') ??
+          true;
+
+      if (autoImportEnabled) {
+        if (!context.mounted) return;
+        final walletsState = context.read<WalletsCubit>().state;
+        final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+        final flushed = await SmsService.flushPendingBackgroundSms(
+          transactionRepository: TransactionRepository(),
+          walletRepository: WalletRepository(),
+          notificationService: NotificationService(),
         );
+        int imported = 0;
+        if (wallets.isNotEmpty && context.mounted) {
+          imported = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+        }
+        final total = flushed + imported;
+        if (total > 0 && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppTheme.primaryColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              content: Text('تم استيراد $total حركات جديدة بنجاح 📩'),
+            ),
+          );
+        }
       }
     }
     if (context.mounted) {

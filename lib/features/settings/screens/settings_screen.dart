@@ -10,11 +10,13 @@ import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/theme/theme_cubit.dart';
 import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
+import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/data/services/notification_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/auth/screens/login_screen.dart';
 import 'package:mizaan/features/auth/screens/register_screen.dart';
+import 'package:mizaan/features/home/widgets/app_hints_modal.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -25,7 +27,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   final NumberFormat _fmt = NumberFormat('#,##0.##', 'ar');
 
   bool _biometricEnabled = false;
@@ -40,15 +42,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadPreferences();
     _checkPermissionStatus();
     _checkBatteryStatus();
   }
 
-  Future<void> _checkBatteryStatus() async {
-    if (Platform.isAndroid) {
-      final status = await Permission.ignoreBatteryOptimizations.isGranted;
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkBatteryStatus(retryIfFalse: true);
+      _checkPermissionStatus();
+    }
+  }
+
+  Future<void> _checkBatteryStatus({bool retryIfFalse = false}) async {
+    if (!Platform.isAndroid) return;
+    try {
+      bool status = await Permission.ignoreBatteryOptimizations.isGranted;
       if (mounted) setState(() => _isBatteryOptimizationIgnored = status);
+
+      if (!status && retryIfFalse) {
+        // Some Android OEMs (Samsung, Xiaomi) update PowerManager with a slight delay
+        for (int i = 0; i < 2; i++) {
+          await Future.delayed(const Duration(milliseconds: 400));
+          if (!mounted) return;
+          status = await Permission.ignoreBatteryOptimizations.isGranted;
+          if (status) {
+            setState(() => _isBatteryOptimizationIgnored = true);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking battery optimization status: $e');
     }
   }
 
@@ -58,6 +91,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       setState(() => _systemNotificationsGranted = hasPerm);
     }
+    if (!hasPerm) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        final retryPerm = await notif.hasPermission();
+        if (retryPerm) {
+          setState(() => _systemNotificationsGranted = true);
+        }
+      }
+    }
   }
 
   String _userKey(String base) {
@@ -66,24 +108,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return '${uid ?? 'guest'}_$base';
   }
 
+  Future<void> _saveSetting(String baseKey, bool value) async {
+    final authState = context.read<AuthCubit>().state;
+    final uid = (authState is Authenticated && !authState.isGuest) ? authState.user?.uid : null;
+    final dbUid = DatabaseService.currentUserId;
+    final prefs = await SharedPreferences.getInstance();
+
+    // Save universally across all possible alias keys so any reader sees the exact same value
+    await prefs.setBool(baseKey, value);
+    await prefs.setBool('guest_$baseKey', value);
+    if (uid != null && uid.isNotEmpty) {
+      await prefs.setBool('${uid}_$baseKey', value);
+    }
+    if (dbUid != null && dbUid.isNotEmpty) {
+      await prefs.setBool('${dbUid}_$baseKey', value);
+    }
+  }
+
+  bool _getSetting(SharedPreferences prefs, String baseKey, bool defaultValue) {
+    final authState = context.read<AuthCubit>().state;
+    final uid = (authState is Authenticated && !authState.isGuest) ? authState.user?.uid : null;
+    final dbUid = DatabaseService.currentUserId;
+
+    if (uid != null && prefs.containsKey('${uid}_$baseKey')) {
+      return prefs.getBool('${uid}_$baseKey')!;
+    }
+    if (dbUid != null && prefs.containsKey('${dbUid}_$baseKey')) {
+      return prefs.getBool('${dbUid}_$baseKey')!;
+    }
+    if (prefs.containsKey(baseKey)) {
+      return prefs.getBool(baseKey)!;
+    }
+    if (prefs.containsKey('guest_$baseKey')) {
+      return prefs.getBool('guest_$baseKey')!;
+    }
+    return defaultValue;
+  }
+
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _biometricEnabled = prefs.getBool(_userKey('biometricEnabled')) ??
-          prefs.getBool('biometricEnabled') ??
-          false;
-      _dailyReminderEnabled = prefs.getBool(_userKey('dailyReminderEnabled')) ??
-          prefs.getBool('dailyReminderEnabled') ??
-          true;
-      _smsAutoImportEnabled = prefs.getBool(_userKey('smsAutoImportEnabled')) ??
-          prefs.getBool('smsAutoImportEnabled') ??
-          true;
-      _smsNotificationsEnabled = prefs.getBool(_userKey('smsNotificationsEnabled')) ??
-          prefs.getBool('smsNotificationsEnabled') ??
-          true;
-      _manualTxNotificationsEnabled = prefs.getBool(_userKey('manualTxNotificationsEnabled')) ??
-          prefs.getBool('manualTxNotificationsEnabled') ??
-          true;
+      _biometricEnabled = _getSetting(prefs, 'biometricEnabled', false);
+      _dailyReminderEnabled = _getSetting(prefs, 'dailyReminderEnabled', true);
+      _smsAutoImportEnabled = _getSetting(prefs, 'smsAutoImportEnabled', true);
+      _smsNotificationsEnabled = _getSetting(prefs, 'smsNotificationsEnabled', true);
+      _manualTxNotificationsEnabled = _getSetting(prefs, 'manualTxNotificationsEnabled', true);
       _lowBalanceThreshold = prefs.getDouble(_userKey('lowBalanceThreshold')) ??
           prefs.getDouble('lowBalanceThreshold') ??
           10000.0;
@@ -126,9 +195,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_userKey('biometricEnabled'), value);
-    await prefs.setBool('biometricEnabled', value);
+    await _saveSetting('biometricEnabled', value);
     if (mounted) {
       context.read<AuthCubit>().setBiometricEnabled(value);
       setState(() => _biometricEnabled = value);
@@ -136,15 +203,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SnackBar(
           content: Text(value ? 'تم تفعيل قفل البصمة بنجاح 🛡️' : 'تم تعطيل قفل البصمة'),
           backgroundColor: AppTheme.primaryColor,
+          duration: const Duration(seconds: 2),
         ),
       );
     }
   }
 
   Future<void> _toggleDailyReminder(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_userKey('dailyReminderEnabled'), value);
-    await prefs.setBool('dailyReminderEnabled', value);
+    await _saveSetting('dailyReminderEnabled', value);
     setState(() => _dailyReminderEnabled = value);
 
     final notif = NotificationService();
@@ -156,19 +222,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } else {
       await notif.cancelDailyReminder();
     }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? 'تم تفعيل التذكير اليومي (9:00 مساءً) ⏰' : 'تم تعطيل التذكير اليومي'),
+          backgroundColor: AppTheme.primaryColor,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _toggleSmsAutoImport(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_userKey('smsAutoImportEnabled'), value);
-    await prefs.setBool('smsAutoImportEnabled', value);
+    await _saveSetting('smsAutoImportEnabled', value);
     setState(() => _smsAutoImportEnabled = value);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? 'تم تفعيل الاستيراد التلقائي للرسائل 📥' : 'تم تعطيل الاستيراد التلقائي للرسائل'),
+          backgroundColor: AppTheme.primaryColor,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _toggleSmsNotifications(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_userKey('smsNotificationsEnabled'), value);
-    await prefs.setBool('smsNotificationsEnabled', value);
+    await _saveSetting('smsNotificationsEnabled', value);
     setState(() => _smsNotificationsEnabled = value);
     if (value) {
       final notif = NotificationService();
@@ -178,31 +258,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _checkPermissionStatus();
       }
     }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? 'تم تفعيل إشعارات حركات الرسائل (SMS) 🔔' : 'تم تعطيل إشعارات حركات الرسائل (SMS)'),
+          backgroundColor: AppTheme.primaryColor,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _requestBatteryOptimizationExemption() async {
     if (!Platform.isAndroid) return;
-    final status = await Permission.ignoreBatteryOptimizations.status;
-    if (!status.isGranted) {
-      final result = await Permission.ignoreBatteryOptimizations.request();
-      final isGranted = result.isGranted;
+
+    // 1. If already granted, notify user and ensure state is updated
+    final alreadyGranted = await Permission.ignoreBatteryOptimizations.isGranted;
+    if (alreadyGranted) {
       if (mounted) {
-        setState(() => _isBatteryOptimizationIgnored = isGranted);
+        setState(() => _isBatteryOptimizationIgnored = true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isGranted
-                ? 'تم إلغاء قيود البطارية! سيعمل التسجيل بالخلفية بدقة وبدون توقف ⚡'
-                : 'يرجى اختيار "بلا قيود / Unrestricted" في إعدادات بطارية الهاتف.'),
-            backgroundColor: isGranted ? AppTheme.primaryColor : Colors.amber.shade800,
+          const SnackBar(
+            content: Text('الاستماع في الخلفية مُفعّل بالفعل بدون قيود ⚡'),
+            backgroundColor: AppTheme.primaryColor,
           ),
         );
       }
-    } else {
-      if (mounted) {
+      return;
+    }
+
+    // 2. Request exemption from the system dialog
+    try {
+      await Permission.ignoreBatteryOptimizations.request();
+    } catch (e) {
+      debugPrint('Error requesting battery optimization: $e');
+    }
+
+    // 3. Actively poll PowerManager directly because Android often returns
+    // RESULT_CANCELED from request() even when granted, and PowerManager takes ~200-500ms to update.
+    bool isGranted = false;
+    for (int i = 0; i < 5; i++) {
+      await Future.delayed(Duration(milliseconds: i == 0 ? 250 : 350));
+      if (!mounted) return;
+      isGranted = await Permission.ignoreBatteryOptimizations.isGranted;
+      if (isGranted) {
+        break;
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isBatteryOptimizationIgnored = isGranted);
+      if (isGranted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('قيود البطارية ملغاة بالفعل! التطبيق يستمع للرسائل في الخلفية دائماً.'),
+            content: Text('تم إلغاء قيود البطارية وتفعيل الاستماع بالخلفية بنجاح! ⚡'),
             backgroundColor: AppTheme.primaryColor,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'يرجى اختيار "بلا قيود / Unrestricted" في إعدادات بطارية الهاتف للسماح بالعمل الدائم في الخلفية.',
+            ),
+            backgroundColor: Colors.amber.shade800,
+            action: SnackBarAction(
+              label: 'الإعدادات',
+              textColor: Colors.white,
+              onPressed: () => openAppSettings(),
+            ),
           ),
         );
       }
@@ -210,9 +334,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _toggleManualTxNotifications(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_userKey('manualTxNotificationsEnabled'), value);
-    await prefs.setBool('manualTxNotificationsEnabled', value);
+    await _saveSetting('manualTxNotificationsEnabled', value);
     setState(() => _manualTxNotificationsEnabled = value);
     if (value) {
       final notif = NotificationService();
@@ -221,6 +343,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await notif.requestPermission();
         _checkPermissionStatus();
       }
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? 'تم تفعيل إشعارات العمليات المالية 🔔' : 'تم تعطيل إشعارات العمليات المالية'),
+          backgroundColor: AppTheme.primaryColor,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -628,28 +759,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: _toggleSmsNotifications,
               ),
               const Divider(height: 1),
-              ListTile(
-                leading: Icon(
-                  _isBatteryOptimizationIgnored ? Icons.bolt_rounded : Icons.battery_alert_rounded,
-                  color: _isBatteryOptimizationIgnored ? Colors.green : Colors.amber.shade700,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                decoration: BoxDecoration(
+                  color: _isBatteryOptimizationIgnored
+                      ? Colors.green.withValues(alpha: 0.05)
+                      : Colors.amber.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                title: const Text('الاستماع في الخلفية (إلغاء قيود البطارية)'),
-                subtitle: Text(
-                  _isBatteryOptimizationIgnored
-                      ? 'الاستماع بالخلفية مُفعّل بدون قيود من النظام (يعمل والتطبيق مغلق)'
-                      : 'مهم جداً: اضغط هنا للسماح بالعمل الدائم في الخلفية وتسجيل الحركات',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _isBatteryOptimizationIgnored ? Colors.green.shade700 : Colors.amber.shade900,
+                child: ListTile(
+                  leading: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Icon(
+                      _isBatteryOptimizationIgnored ? Icons.bolt_rounded : Icons.battery_alert_rounded,
+                      key: ValueKey(_isBatteryOptimizationIgnored),
+                      color: _isBatteryOptimizationIgnored ? Colors.green : Colors.amber.shade700,
+                      size: 26,
+                    ),
                   ),
+                  title: const Text('الاستماع في الخلفية (إلغاء قيود البطارية)'),
+                  subtitle: Text(
+                    _isBatteryOptimizationIgnored
+                        ? 'الاستماع بالخلفية مُفعّل بدون قيود من النظام (يعمل والتطبيق مغلق)'
+                        : 'مهم جداً: اضغط هنا للسماح بالعمل الدائم في الخلفية وتسجيل الحركات',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _isBatteryOptimizationIgnored ? Colors.green.shade700 : Colors.amber.shade900,
+                    ),
+                  ),
+                  trailing: _isBatteryOptimizationIgnored
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded, color: Colors.green, size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                'مُفعّل',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : TextButton(
+                          onPressed: _requestBatteryOptimizationExemption,
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.primaryColor,
+                            textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          child: const Text('سماح'),
+                        ),
+                  onTap: _requestBatteryOptimizationExemption,
                 ),
-                trailing: _isBatteryOptimizationIgnored
-                    ? const Icon(Icons.check_circle_rounded, color: Colors.green)
-                    : TextButton(
-                        onPressed: _requestBatteryOptimizationExemption,
-                        child: const Text('سماح'),
-                      ),
-                onTap: _requestBatteryOptimizationExemption,
               ),
               const Divider(height: 1),
               ListTile(
@@ -665,6 +836,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ]),
             const SizedBox(height: 16),
           ],
+
+          // Section: Help, Guide & Hints
+          _buildSectionHeader('المساعدة والدليل 💡'),
+          _buildCard([
+            ListTile(
+              leading: const Icon(Icons.lightbulb_outline_rounded, color: AppTheme.primaryColor),
+              title: const Text('دليل وتلميحات ميزان'),
+              subtitle: const Text(
+                'تعرف على آلية عمل التطبيق، الخصوصية، وحلول مشاكل الخلفية للأجهزة المختلفة',
+                style: TextStyle(fontSize: 12),
+              ),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: () => AppHintsModal.show(context),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.restart_alt_rounded, color: AppTheme.secondaryColor),
+              title: const Text('إظهار دليل البداية السريعة في الرئيسية'),
+              subtitle: const Text(
+                'إعادة تفعيل بطاقة الخطوات الترحيبية في الشاشة الرئيسية',
+                style: TextStyle(fontSize: 12),
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+              onTap: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('dismissed_new_user_guide', false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تمت إعادة إظهار دليل البداية السريعة في الشاشة الرئيسية ✅'),
+                      backgroundColor: AppTheme.primaryColor,
+                    ),
+                  );
+                }
+              },
+            ),
+          ]),
+          const SizedBox(height: 16),
 
           // Section 5: Logout or Local Vault Reset
           BlocBuilder<AuthCubit, AuthState>(

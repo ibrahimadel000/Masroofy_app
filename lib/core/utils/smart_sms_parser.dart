@@ -73,6 +73,25 @@ class SmartSmsParser {
     String? customWalletName,
   }) {
     final normalized = SmsSenderRegistry.normalizeDigits(body);
+
+    const promoIndicators = [
+      'عرض خاص', 'عروض', 'خصومات', 'اشترك', 'باقات', 'اربح', 'جوائز', 'مبروك',
+      'مجانا', 'وفر', 'كود خصم', 'كوبون', 'باقة',
+    ];
+    final isPromo = promoIndicators.any((kw) => normalized.contains(kw));
+    final hasBankAnchor = normalized.contains('رصيد') ||
+        normalized.contains('حسابك') ||
+        normalized.contains('محفظت') ||
+        normalized.contains('مرجع') ||
+        normalized.contains('ref') ||
+        normalized.contains('balance') ||
+        normalized.contains('account') ||
+        normalized.contains('deposit');
+
+    if (isPromo && !hasBankAnchor) {
+      return const SmartSmsAnalysisResult();
+    }
+
     final detectedCurrency = detectCurrency(normalized);
 
     // Pass 1: Extract Balance and isolate its position

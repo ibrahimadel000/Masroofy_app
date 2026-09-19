@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -87,20 +88,20 @@ class WalletRepository {
     // 1. Local Hive write first (offline-first source of truth)
     await _box.put(wallet.id, wallet);
 
-    // 2. Attempt Firestore sync if online/logged in
+    // 2. Attempt Firestore sync in background (fire-and-forget so offline execution never hangs)
     final uid = _currentUserId;
     final fs = _firestore;
     if (uid != null && fs != null) {
-      try {
-        await fs
+      unawaited(
+        fs
             .collection('users')
             .doc(uid)
             .collection('wallets')
             .doc(wallet.id)
-            .set(wallet.toMap(), SetOptions(merge: true));
-      } catch (_) {
-        // Offline or network failure: Hive remains the source of truth
-      }
+            .set(wallet.toMap(), SetOptions(merge: true))
+            .timeout(const Duration(seconds: 3))
+            .catchError((_) {}),
+      );
     }
   }
 
@@ -108,20 +109,20 @@ class WalletRepository {
     // 1. Delete from Hive
     await _box.delete(id);
 
-    // 2. Delete from Firestore if logged in
+    // 2. Delete from Firestore in background (fire-and-forget)
     final uid = _currentUserId;
     final fs = _firestore;
     if (uid != null && fs != null) {
-      try {
-        await fs
+      unawaited(
+        fs
             .collection('users')
             .doc(uid)
             .collection('wallets')
             .doc(id)
-            .delete();
-      } catch (_) {
-        // Silent catch for offline mode
-      }
+            .delete()
+            .timeout(const Duration(seconds: 3))
+            .catchError((_) {}),
+      );
     }
   }
 

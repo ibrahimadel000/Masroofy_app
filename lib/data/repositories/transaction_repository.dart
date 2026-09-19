@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -297,20 +298,20 @@ class TransactionRepository {
       await saveSmsKey(tx.smsKey!);
     }
 
-    // 2. Attempt sync to Firestore if online/logged in
+    // 2. Attempt sync to Firestore in background (fire-and-forget so offline execution never hangs)
     final uid = _currentUserId;
     final fs = _firestore;
     if (uid != null && fs != null) {
-      try {
-        await fs
+      unawaited(
+        fs
             .collection('users')
             .doc(uid)
             .collection('transactions')
             .doc(tx.id)
-            .set(tx.toMap(), SetOptions(merge: true));
-      } catch (_) {
-        // Offline fallback
-      }
+            .set(tx.toMap(), SetOptions(merge: true))
+            .timeout(const Duration(seconds: 3))
+            .catchError((_) {}),
+      );
     }
   }
 
@@ -318,20 +319,20 @@ class TransactionRepository {
     // 1. Delete from Hive
     await _box.delete(id);
 
-    // 2. Delete from Firestore if logged in
+    // 2. Delete from Firestore in background (fire-and-forget)
     final uid = _currentUserId;
     final fs = _firestore;
     if (uid != null && fs != null) {
-      try {
-        await fs
+      unawaited(
+        fs
             .collection('users')
             .doc(uid)
             .collection('transactions')
             .doc(id)
-            .delete();
-      } catch (_) {
-        // Offline fallback
-      }
+            .delete()
+            .timeout(const Duration(seconds: 3))
+            .catchError((_) {}),
+      );
     }
   }
 
