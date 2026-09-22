@@ -40,6 +40,19 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- Disable Impeller on Android to prevent black screen rendering freezes on devices & emulators -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
+        <!-- Firebase Cloud Messaging default notification channel and icon -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/launcher_icon" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="mizaan_announcements" />
+
         <!-- High-priority Native SMS Broadcast Receiver for instant background notifications -->
         <receiver
             android:name="com.mizaan.app.SmsReceiver"

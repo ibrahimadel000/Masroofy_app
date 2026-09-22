@@ -36,6 +36,10 @@ class NotificationService {
   static const String transactionsChannelName = 'حركات المحافظ والرسائل';
   static const String transactionsChannelDesc = 'إشعارات فورية بالعمليات المالية والمشتريات والإيداعات المستلمة';
 
+  static const String announcementsChannelId = 'mizaan_announcements';
+  static const String announcementsChannelName = 'إعلانات وتحديثات ميزان';
+  static const String announcementsChannelDesc = 'إشعارات عامة وتحديثات أسعار الصرف وقوالب المحافظ';
+
   Future<void> init() async {
     if (_isInitialized) return;
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
@@ -102,6 +106,19 @@ class NotificationService {
               importance: Importance.high,
               playSound: true,
               enableVibration: true,
+            ),
+          );
+
+          // Channel 4: Announcements & Remote Updates (FCM)
+          await androidImpl.createNotificationChannel(
+            const AndroidNotificationChannel(
+              announcementsChannelId,
+              announcementsChannelName,
+              description: announcementsChannelDesc,
+              importance: Importance.high,
+              playSound: true,
+              enableVibration: true,
+              enableLights: true,
             ),
           );
         }
@@ -345,6 +362,59 @@ class NotificationService {
     final body = 'تم تسجيل ${isExpense ? "مصروف" : "إيداع"} بمبلغ $formattedAmount $currencyCode في $walletName$balanceText';
 
     await showTransactionAlert(title: title, body: body);
+  }
+
+  /// Show remote notification received from FCM or cloud campaigns
+  Future<void> showRemoteNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
+    try {
+      if (!_isInitialized) await init();
+
+      final androidDetails = AndroidNotificationDetails(
+        announcementsChannelId,
+        announcementsChannelName,
+        channelDescription: announcementsChannelDesc,
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/launcher_icon',
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        channelShowBadge: true,
+        ticker: title,
+        styleInformation: BigTextStyleInformation(
+          body,
+          contentTitle: title,
+          summaryText: 'ميزان',
+        ),
+      );
+
+      const darwinDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      final details = NotificationDetails(
+        android: androidDetails,
+        iOS: darwinDetails,
+      );
+
+      final notifId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      await _plugin.show(
+        notifId,
+        title,
+        body,
+        details,
+        payload: payload,
+      );
+    } catch (e) {
+      debugPrint('showRemoteNotification error: $e');
+    }
   }
 }
 

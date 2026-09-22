@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/constants/sms_senders.dart';
+import 'package:mizaan/core/utils/smart_sms_parser.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/repositories/transaction_repository.dart';
 
@@ -554,6 +555,242 @@ void main() {
       expect(parsed.amount, 10000.0);
       expect(parsed.balance, 35000.0);
       expect(parsed.referenceNumber, '98765');
+    });
+
+    test('Kuraimi deposit variant with "في حسابك" (Income 25,000)', () {
+      const sender = 'KuraimiMB';
+      const body = 'أودع فلان في حسابك مبلغ 25,000 ر.ي رصيدك 75,000 ر.ي';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 25000.0);
+      expect(parsed.balance, 75000.0);
+    });
+
+    test('Kuraimi deposit with phone number and account number does NOT confuse amount (Income 30,000)', () {
+      const sender = 'Kuraimi';
+      const body = 'أودع/علي 771234567 لحسابك 12345678 بمبلغ 30,000 ريال رصيدك 80,000 ريال';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 30000.0);
+      expect(parsed.balance, 80000.0);
+    });
+
+    test('Kuraimi inward transfer "تم تحويل ... لحسابك" is recorded as Income (Income 15,000)', () {
+      const sender = 'KuraimiMB';
+      const body = 'تم تحويل مبلغ 15000 ريال لحسابك من فؤاد رصيدك 65000 ريال';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 15000.0);
+      expect(parsed.balance, 65000.0);
+    });
+
+    test('Kuraimi cash deposit "تم إيداع نقدي" (Income 40,000)', () {
+      const sender = 'Kuraimi';
+      const body = 'تم إيداع نقدي بمبلغ 40000 ر.ي في حسابك رصيدك 90000 ر.ي';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 40000.0);
+      expect(parsed.balance, 90000.0);
+    });
+
+    test('Kuraimi account feed with haa "تغذيه" (Income 20,000)', () {
+      const sender = 'KuraimiMB';
+      const body = 'تغذيه حسابك بمبلغ 20000 ريال رصيدك 50000 ريال';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 20000.0);
+      expect(parsed.balance, 50000.0);
+    });
+
+    test('Jaib wallet deposit with haa "تمت اضافه" (Income 5,000)', () {
+      const sender = 'Jaib';
+      const body = 'تمت اضافه 5000 ر.ي الى محفظتك جيب رصيدك 15000 ر.ي';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'jeeb');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 5000.0);
+      expect(parsed.balance, 15000.0);
+    });
+
+    test('Jaib inward transfer "تم تحويل ... إلى محفظتك" is Income (Income 8,000)', () {
+      const sender = 'Jaib';
+      const body = 'تم تحويل 8000 ر.ي إلى محفظتك جيب من 777123456 رص: 23000ر.ي';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'jeeb');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 8000.0);
+      expect(parsed.balance, 23000.0);
+    });
+
+    test('PYes (بايس) deposit SMS parsed as pyes wallet (Income 12,000)', () {
+      const sender = 'PYes';
+      const body = 'تم استلام حوالة بمبلغ 12000 ريال رصيدك 35000 مرجع 112233';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'pyes');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 12000.0);
+      expect(parsed.balance, 35000.0);
+      expect(parsed.referenceNumber, '112233');
+    });
+
+    test('Busairi (البصيري) deposit SMS parsed as busairi wallet (Income 50,000)', () {
+      const sender = 'Busairi';
+      const body = 'تم قيد مبلغ 50000 ريال لحسابكم طرفنا رقم الاشعار 778899 رصيدك 120000';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'busairi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 50000.0);
+      expect(parsed.balance, 120000.0);
+      expect(parsed.referenceNumber, '778899');
+    });
+
+    test('WeePay (وي باي) deposit SMS parsed as weepay wallet (Income 10,000)', () {
+      const sender = 'WeePay';
+      const body = 'تم إيداع مبلغ 10000 ريال في محفظتك وي باي رصيدك 45000';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'weepay');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 10000.0);
+      expect(parsed.balance, 45000.0);
+    });
+
+    test('Credit notice (إشعار دائن) parsed as income (Income 75,000)', () {
+      const sender = 'KuraimiMB';
+      const body = 'إشعار دائن بمبلغ 75,000 ريال لحسابكم رقم 123456 رصيدك 95,000 ريال';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'kuraimi');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 75000.0);
+      expect(parsed.balance, 95000.0);
+    });
+
+    test('Reversal credit (عكس قيد لصالحك) parsed as income (Income 4,200)', () {
+      const sender = 'Jaib';
+      const body = 'عكس قيد لصالحك بمبلغ 4200 ر.ي في محفظتك جيب رصيدك 18200 ر.ي';
+
+      final parsed = SmsSenderRegistry.parseMessage(
+        sender: sender,
+        body: body,
+        date: testDate,
+      );
+
+      expect(parsed, isNotNull);
+      expect(parsed!.walletType, 'jeeb');
+      expect(parsed.type, 'income');
+      expect(parsed.amount, 4200.0);
+      expect(parsed.balance, 18200.0);
+    });
+
+    test('SmartSmsParser: deposit with phone and account number extracts amount not phone', () {
+      const body = 'أودع/علي 771234567 لحسابك 12345678 بمبلغ 30,000 ريال رصيدك 80,000 ريال';
+      final result = SmartSmsParser.analyzeSms(body: body, sender: 'UnknownBank');
+
+      expect(result.isSuccess, isTrue);
+      expect(result.type, 'income');
+      expect(result.amount, 30000.0);
+      expect(result.balance, 80000.0);
+    });
+
+    test('SmartSmsParser: inward transfer with sender phone extracts amount not phone', () {
+      const body = 'تم تحويل 8000 ر.ي إلى محفظتك جيب من 777123456 رص: 23000ر.ي';
+      final result = SmartSmsParser.analyzeSms(body: body, sender: 'UnknownBank');
+
+      expect(result.isSuccess, isTrue);
+      expect(result.type, 'income');
+      expect(result.amount, 8000.0);
+      expect(result.balance, 23000.0);
+    });
+
+    test('SmartSmsParser: credit advice in custom bank recognized as income', () {
+      const body = 'اشعار دائن بمبلغ 1500 USD رصيدك الحالي 5200 USD';
+      final result = SmartSmsParser.analyzeSms(body: body, sender: 'GlobalBank');
+
+      expect(result.isSuccess, isTrue);
+      expect(result.type, 'income');
+      expect(result.amount, 1500.0);
+      expect(result.balance, 5200.0);
     });
   });
 }

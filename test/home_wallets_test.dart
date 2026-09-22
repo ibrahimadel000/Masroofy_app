@@ -59,6 +59,9 @@ class FakeTransactionRepository implements TransactionRepository {
   bool hasSmsKey(String smsKey) => _smsKeys.contains(smsKey);
 
   @override
+  Future<int> repairMisclassifiedSmsTransactions() async => 0;
+
+  @override
   Future<void> saveSmsKey(String smsKey) async {
     _smsKeys.add(smsKey);
   }

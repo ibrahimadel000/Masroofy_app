@@ -52,9 +52,16 @@ class SmartSmsParser {
 
   /// Income indicator keywords in Arabic and English
   static const List<String> incomeKeywords = [
-    'إيداع', 'ايداع', 'تم إيداع', 'تم ايداع', 'أودع', 'اودع',
-    'تم استلام', 'استلام', 'وارد', 'تحويل وارد', 'حوالة واردة',
-    'اضيف', 'أضيف', 'تمت إضافة', 'تم اضافة', 'لحسابك',
+    'إيداع', 'ايداع', 'الإيداع', 'الايداع', 'تم إيداع', 'تم ايداع', 'إيداع نقدي', 'ايداع نقدي',
+    'أودع', 'اودع', 'أودعت', 'اودعت', 'أودع لك', 'اودع لك',
+    'تم استلام', 'استلام', 'وارد', 'تحويل وارد', 'حوالة واردة', 'حواله وارده', 'حوالة من', 'حواله من',
+    'اضيف', 'أضيف', 'أضيفت', 'اضيفت', 'إضافة', 'اضافة', 'إضافه', 'اضافه', 'تمت إضافة', 'تمت اضافه',
+    'تغذية', 'تغذيه', 'تمت تغذية', 'تمت تغذيه', 'تم تغذية', 'تم تغذيه',
+    'قيد لحسابك', 'قيد لحسابكم', 'قيد في حسابك', 'قيد في حسابكم', 'تم قيد', 'تم القيد',
+    'تحويل لحسابك', 'تحويل لحسابكم', 'تحويل إلى محفظتك', 'تحويل الى محفظتك', 'تحويل إلى حسابك', 'تحويل الى حسابك',
+    'تحويل لك', 'وصلك تحويل', 'وصلتك حوالة', 'وصلتك حواله', 'وصلك مبلغ',
+    'شحن', 'قبض', 'توريد', 'لحسابك', 'لحسابكم',
+    'دائن', 'اشعار دائن', 'إشعار دائن', 'عكس قيد', 'لصالحك',
     'credited', 'credit', 'deposited', 'deposit', 'received', 'transfer in', 'added'
   ];
 
@@ -84,6 +91,8 @@ class SmartSmsParser {
         normalized.contains('محفظت') ||
         normalized.contains('مرجع') ||
         normalized.contains('ref') ||
+        normalized.contains('دائن') ||
+        normalized.contains('لصالحك') ||
         normalized.contains('balance') ||
         normalized.contains('account') ||
         normalized.contains('deposit');
@@ -158,22 +167,22 @@ class SmartSmsParser {
 
   /// Pass 1: Balance Extraction
   static _NumberSpan? _extractBalance(String text) {
-    final balKw = balanceKeywords.map(RegExp.escape).join('|');
     final patterns = [
-      // Direct balance: "رصيدك YER 4,045.30", "الرصيد: 3000 ر.س", "Avail Bal: $1,250"
+      // 1. Direct balance with optional qualifiers (الحالي, المتاح, المتوفر, المتبقي, etc.):
+      // e.g. "رصيدك الحالي 5200 USD", "رصيدك YER 4,045.30", "الرصيد: 3000 ر.س", "Avail Bal: $1,250"
       RegExp(
-        '(?:$balKw)[\\s:]*(?:هو|is|:|=)?[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
+        r'(?:الرصيد|رصيدك|رصيد|رص:?|balance|avail bal|available balance|cur bal|new balance)\s*(?:حسابك)?\s*(?:الحالي|المتوفر|المتاح|المتبقي|الفعلي|الجديد|الآن|الان|طرفنا|هو|is|:|=)*[\s:]*(?:' + currencyPattern + r')?[\s:]*([0-9,]+(?:\.[0-9]+)?)',
         caseSensitive: false,
       ),
-      // Intervening clause: "available balance for account ending in 9876 is USD 3,500.00"
+      // 2. Intervening clause: "available balance for account ending in 9876 is USD 3,500.00"
       RegExp(
-        '(?:$balKw)[\\s\\S]*?(?:هو|is|:|=)[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
+        r'(?:الرصيد|رصيدك|رصيد|balance|avail bal|available balance)[\s\S]*?(?:هو|is|:|=)[\s:]*(?:' + currencyPattern + r')?[\s:]*([0-9,]+(?:\.[0-9]+)?)',
         caseSensitive: false,
         dotAll: true,
       ),
-      // Suffix balance: "4,045.30 YER رصيدك", "$1,250 Avail Bal"
+      // 3. Suffix balance: "4,045.30 YER رصيدك", "$1,250 Avail Bal" (must NOT be preceded by بمبلغ/بقيمة/amount)
       RegExp(
-        '([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)+[\\s:]*(?:$balKw)',
+        r'(?<!(?:ب?مبلغ|ب?قيمة|amount)\s*)([0-9,]+(?:\.[0-9]+)?)\s*(?:' + currencyPattern + r')+\s*(?:الرصيد|رصيدك|رصيد|balance|bal)\b',
         caseSensitive: false,
       ),
     ];
@@ -203,16 +212,38 @@ class SmartSmsParser {
   /// Pass 2: Operation Amount & Type Extraction
   static _OperationResult? _extractOperation(String text) {
     final incKw = incomeKeywords.map(RegExp.escape).join('|');
-    // Check Income patterns
+    // Check Income patterns in hierarchical tiers
     final incomePatterns = [
+      // Tier 1: Income Keyword followed by explicit amount indicator: (أودع ... بمبلغ 30,000)
       RegExp(
-        '(?:$incKw)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|with|by|amount)?[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
+        '(?:$incKw)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|amount|with|by)[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
         caseSensitive: false,
         dotAll: true,
       ),
+      // Tier 2: Inward transfer pattern (amount before destination clause: تم تحويل 8000 إلى محفظتك)
       RegExp(
-        '([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)?[\\s:]*(?:$incKw)',
+        r'(?:تم\s+)?(?:تحويل|توريد|إيداع|ايداع|أودع|اودع|قيد)\s+(?:مبلغ\s+)?([0-9,]+(?:\.[0-9]+)?)\s*(?:' + currencyPattern + r')?\s*(?:إلى|الى|في|لحساب|لك)',
         caseSensitive: false,
+      ),
+      // Tier 3: Keyword followed directly by currency and amount (excluding 9-digit phone numbers)
+      RegExp(
+        '(?:$incKw)[\\s:]*(?:$currencyPattern)[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
+        caseSensitive: false,
+      ),
+      RegExp(
+        '(?:$incKw)[\\s:]*(?<!\\d)(?!(?:7[01378]\\d{7}))([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)',
+        caseSensitive: false,
+      ),
+      // Tier 4: Suffix: Amount followed by currency and keyword
+      RegExp(
+        '(?<!\\d)(?!(?:7[01378]\\d{7}))([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)?[\\s:]*(?:$incKw)',
+        caseSensitive: false,
+      ),
+      // Tier 5: General keyword match excluding phone numbers
+      RegExp(
+        '(?:$incKw)[\\s\\S]*?(?<!\\d)(?!(?:7[01378]\\d{7}))([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]+)?|[0-9]+(?:\\.[0-9]+)?)(?!\\d)',
+        caseSensitive: false,
+        dotAll: true,
       ),
     ];
 
@@ -231,17 +262,51 @@ class SmartSmsParser {
       }
     }
 
-    final expKw = expenseKeywords.map(RegExp.escape).join('|');
-    // Check Expense patterns
+    final hasInwardTarget = text.contains('لحسابك') ||
+        text.contains('لحسابكم') ||
+        text.contains('إلى حسابك') ||
+        text.contains('الى حسابك') ||
+        text.contains('في حسابك') ||
+        text.contains('في حسابكم') ||
+        text.contains('إلى محفظتك') ||
+        text.contains('الى محفظتك') ||
+        text.contains('لك');
+
+    final activeExpenseKeywords = expenseKeywords.where((kw) {
+      if ((kw == 'تحويل' || kw == 'تم تحويل' || kw == 'transferred' || kw == 'transfer to') && hasInwardTarget) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final expKw = activeExpenseKeywords.map(RegExp.escape).join('|');
+    // Check Expense patterns in hierarchical tiers
     final expensePatterns = [
+      // Tier 1: Expense Keyword followed by explicit amount indicator: (تم سداد مبلغ 250.00)
       RegExp(
-        '(?:$expKw)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|with|by|for|amount)?[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
+        '(?:$expKw)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|amount|for|with)[\\s:]*(?:$currencyPattern)?[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
         caseSensitive: false,
         dotAll: true,
       ),
+      // Tier 2: Keyword directly followed by currency and amount
       RegExp(
-        '([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)?[\\s:]*(?:$expKw)',
+        '(?:$expKw)[\\s:]*(?:$currencyPattern)[\\s:]*([0-9,]+(?:\\.[0-9]+)?)',
         caseSensitive: false,
+      ),
+      RegExp(
+        '(?:$expKw)[\\s:]*(?<!\\d)(?!(?:7[01378]\\d{7}))([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)',
+        caseSensitive: false,
+      ),
+      // Tier 3: Suffix
+      RegExp(
+        '(?<!\\d)(?!(?:7[01378]\\d{7}))([0-9,]+(?:\\.[0-9]+)?)[\\s:]*(?:$currencyPattern)?[\\s:]*(?:$expKw)',
+        caseSensitive: false,
+      ),
+      // Tier 4: General fallback excluding phone numbers
+      RegExp(
+        '(?:$expKw)[\\s\\S]*?(?<!\\d)(?!(?:7[01378]\\d{7}))([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]+)?|[0-9]+(?:\\.[0-9]+)?)(?!\\d)',
+        caseSensitive: false,
+        dotAll: true,
       ),
     ];
 
@@ -273,13 +338,23 @@ class SmartSmsParser {
     final currRegex = currencyPattern;
 
     final incomeStrings = [
-      '(?:إيداع|ايداع|تم إيداع|تم استلام|وارد|حوالة واردة|اضيف|أضيف|أودع|اودع|credited|deposit|deposited|received)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|amount|with)?\\s*'
+      '(?:إيداع|ايداع|تم إيداع|تم استلام|وارد|حوالة واردة|اضيف|أضيف|أودع|اودع|credited|deposit|deposited|received)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|amount|with)\\s*'
           '$currRegex?\\s*([0-9,]+(?:\\.[0-9]+)?)',
+      r'(?:تم\s+)?(?:تحويل|توريد|إيداع|ايداع)\s+(?:مبلغ\s+)?([0-9,]+(?:\.[0-9]+)?)\s*'
+          '$currRegex?\\s*(?:إلى|الى|في|لحساب)',
+      '(?:إيداع|ايداع|تم إيداع|تم استلام|وارد|حوالة واردة|اضيف|أضيف|أودع|اودع|credited|deposit|deposited|received)[\\s\\S]*?'
+          '$currRegex\\s*([0-9,]+(?:\\.[0-9]+)?)',
+      r'(?<!\d)(?!(?:7[01378]\d{7}))([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s*'
+          '$currRegex\\s*(?:إيداع|ايداع|أودع|اضيف|وارد)',
     ];
 
     final expenseStrings = [
-      '(?:خصم|تم خصم|سداد|تم سداد|سحب|تم سحب|شراء|تم شراء|مشتريات|تحويل|debited|spent|paid|payment|withdrawn|purchase)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|amount|for)?\\s*'
+      '(?:خصم|تم خصم|سداد|تم سداد|سحب|تم سحب|شراء|تم شراء|مشتريات|تحويل|debited|spent|paid|payment|withdrawn|purchase)[\\s\\S]*?(?:ب?مبلغ|ب?قيمة|amount|for)\\s*'
           '$currRegex?\\s*([0-9,]+(?:\\.[0-9]+)?)',
+      '(?:خصم|تم خصم|سداد|تم سداد|سحب|تم سحب|شراء|تم شراء|مشتريات|تحويل|debited|spent|paid|payment|withdrawn|purchase)[\\s\\S]*?'
+          '$currRegex\\s*([0-9,]+(?:\\.[0-9]+)?)',
+      r'(?<!\d)(?!(?:7[01378]\d{7}))([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s*'
+          '$currRegex\\s*(?:خصم|شراء|سداد|سحب)',
     ];
 
     final balanceStrings = [

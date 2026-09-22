@@ -118,8 +118,12 @@ class TransactionRepository {
             if (normText.isNotEmpty) {
               final acceptedNorm = normalizeBodyForComparison(accepted.rawSmsBody ?? accepted.note);
               if (acceptedNorm.isNotEmpty && acceptedNorm == normText) {
-                isDup = true;
-                break;
+                // For identical generic SMS bodies (e.g. deposits without refs), only consider duplicate if within 24 hours
+                final diff = accepted.date.difference(tx.date).abs();
+                if (diff.inHours < 24) {
+                  isDup = true;
+                  break;
+                }
               }
             }
 
@@ -250,8 +254,13 @@ class TransactionRepository {
           if (tx.walletId == walletId &&
               tx.type == type &&
               (tx.amount - amount).abs() < 0.01) {
-            final txNorm = normalizeBodyForComparison(tx.rawSmsBody ?? tx.note);
-            if (txNorm.isNotEmpty && txNorm == normBody) return true;
+            
+            // Only consider identical SMS bodies as duplicate if they are within 24 hours
+            final diff = tx.date.difference(date).abs();
+            if (diff.inHours < 24) {
+              final txNorm = normalizeBodyForComparison(tx.rawSmsBody ?? tx.note);
+              if (txNorm.isNotEmpty && txNorm == normBody) return true;
+            }
           }
         }
       }
@@ -285,6 +294,41 @@ class TransactionRepository {
         removedCount++;
       }
       return removedCount;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Automatically repair existing transactions in Hive that were saved as 0.0 adjustments or misclassified
+  Future<int> repairMisclassifiedSmsTransactions() async {
+    try {
+      final box = _safeBox;
+      if (box == null) return 0;
+      final all = box.values.toList();
+      int repairedCount = 0;
+
+      for (final tx in all) {
+        final rawBody = tx.rawSmsBody;
+        if (rawBody == null || rawBody.isEmpty) continue;
+        // Target transactions that were saved with 0.0 amount or adjustment type despite having a real transaction body
+        if (tx.amount <= 0.01 || tx.type == 'adjustment') {
+          final parsed = SmsSenderRegistry.parseMessage(
+            sender: tx.rawSmsSender ?? '',
+            body: rawBody,
+            date: tx.date,
+          );
+          if (parsed != null && !parsed.isBalanceOnly && parsed.amount > 0) {
+            final updated = tx.copyWith(
+              type: parsed.type,
+              amount: parsed.amount,
+              category: parsed.category,
+            );
+            await saveTransaction(updated);
+            repairedCount++;
+          }
+        }
+      }
+      return repairedCount;
     } catch (_) {
       return 0;
     }

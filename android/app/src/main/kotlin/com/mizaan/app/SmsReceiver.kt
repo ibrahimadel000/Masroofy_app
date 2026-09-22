@@ -45,7 +45,8 @@ class SmsReceiver : BroadcastReceiver() {
         private val FINANCIAL_KEYWORDS = listOf(
             "إيداع", "ايداع", "أودع", "اودع", "أضيف", "اضيف", "إضافة", "اضافة", "استلام", "تغذية",
             "خصم", "شراء", "مشتريات", "سداد", "تحويل", "دفع", "سحب", "حوالة",
-            "حاسب", "نقاط البيع", "رصيدك", "رصيد حسابك", "قيد",
+            "حاسب", "نقاط البيع", "رصيدك", "رصيد حسابك", "قيد", "دائن", "إشعار دائن", "اشعار دائن",
+            "عكس قيد", "لصالحك", "توريد", "لحسابك", "لحسابكم", "محفظتك",
             "رصيد", "مبلغ", "ريال", "yer", "sar", "usd", "$"
         )
     }
@@ -179,7 +180,10 @@ class SmsReceiver : BroadcastReceiver() {
                        body.contains("أضيف") || body.contains("اضيف") || body.contains("إضافة") || 
                        body.contains("اضافة") || body.contains("استلام") || body.contains("تغذية") ||
                        body.contains("تحويل وارد") || body.contains("حوالة واردة") || body.contains("تحويل إلى") ||
-                       body.contains("تحويل الى") || body.contains("تحويل لك") || body.contains("قيد لحسابك")
+                       body.contains("تحويل الى") || body.contains("تحويل لك") || body.contains("قيد لحسابك") ||
+                       body.contains("دائن") || body.contains("إشعار دائن") || body.contains("اشعار دائن") ||
+                       body.contains("عكس قيد") || body.contains("لصالحك") || body.contains("توريد") ||
+                       body.contains("إلى محفظتك") || body.contains("الى محفظتك") || body.contains("لحسابك")
         val isPurchase = body.contains("شراء") || body.contains("مشتريات") || body.contains("حاسب")
 
         val title = when {

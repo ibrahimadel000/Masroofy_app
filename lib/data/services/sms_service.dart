@@ -503,14 +503,17 @@ class SmsService {
         await prefs.setStringList(pendingSmsQueueKey, remainingDart);
       }
 
-      if (flushedCount > 0) {
+      // Repair any historical SMS transactions that were misclassified or saved with 0.0 amount
+      final repairedCount = await txRepo.repairMisclassifiedSmsTransactions();
+
+      if (flushedCount > 0 || repairedCount > 0) {
         await const SmsService().reconcileWalletsWithLatestSms(
           transactionRepository: txRepo,
           walletRepository: walletRepo,
         );
       }
 
-      return flushedCount;
+      return flushedCount + repairedCount;
     } catch (_) {
       return 0;
     }
@@ -564,7 +567,7 @@ class SmsService {
         walletId: matchedWallet.id,
         type: parsed.type,
         amount: parsed.amount,
-        category: parsed.category,
+        category: parsed.isBalanceOnly ? 'كشف حساب' : parsed.category,
         note: parsed.rawBody,
         date: parsed.date,
         source: 'sms',

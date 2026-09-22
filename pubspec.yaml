@@ -26,6 +26,8 @@ dependencies:
   firebase_core: ^3.12.1
   firebase_auth: ^5.5.1
   cloud_firestore: ^5.6.5
+  firebase_messaging: ^15.2.4
+  firebase_analytics: ^11.3.3
 
   # Biometrics & Permissions & Notifications
   local_auth: ^2.3.0
