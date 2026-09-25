@@ -15,7 +15,7 @@ class NotificationService {
   }
 
   NotificationService._internal({FlutterLocalNotificationsPlugin? plugin})
-      : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   FlutterLocalNotificationsPlugin _plugin;
   bool _isInitialized = false;
@@ -26,7 +26,8 @@ class NotificationService {
 
   static const String alertsChannelId = 'mizaan_alerts';
   static const String alertsChannelName = 'تنبيهات ميزان';
-  static const String alertsChannelDesc = 'إشعارات تنبيه الرصيد المنخفض للمحافظ';
+  static const String alertsChannelDesc =
+      'إشعارات تنبيه الرصيد المنخفض للمحافظ';
 
   static const String remindersChannelId = 'mizaan_reminders';
   static const String remindersChannelName = 'تذكيرات ميزان';
@@ -34,11 +35,13 @@ class NotificationService {
 
   static const String transactionsChannelId = 'mizaan_transactions';
   static const String transactionsChannelName = 'حركات المحافظ والرسائل';
-  static const String transactionsChannelDesc = 'إشعارات فورية بالعمليات المالية والمشتريات والإيداعات المستلمة';
+  static const String transactionsChannelDesc =
+      'إشعارات فورية بالعمليات المالية والمشتريات والإيداعات المستلمة';
 
   static const String announcementsChannelId = 'mizaan_announcements';
   static const String announcementsChannelName = 'إعلانات وتحديثات ميزان';
-  static const String announcementsChannelDesc = 'إشعارات عامة وتحديثات أسعار الصرف وقوالب المحافظ';
+  static const String announcementsChannelDesc =
+      'إشعارات عامة وتحديثات أسعار الصرف وقوالب المحافظ';
 
   Future<void> init() async {
     if (_isInitialized) return;
@@ -47,7 +50,9 @@ class NotificationService {
       return;
     }
     try {
-      const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/launcher_icon',
+      );
       const darwinSettings = DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
@@ -68,8 +73,10 @@ class NotificationService {
 
       // Create Android Notification Channels (Mandatory for Android 8.0+)
       if (Platform.isAndroid) {
-        final androidImpl =
-            _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        final androidImpl = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
         if (androidImpl != null) {
           // Channel 1: Instant transactions & alerts (Max priority, Heads-up)
           await androidImpl.createNotificationChannel(
@@ -135,8 +142,10 @@ class NotificationService {
     if (!Platform.isAndroid && !Platform.isIOS) return false;
     try {
       if (Platform.isAndroid) {
-        final androidImpl =
-            _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        final androidImpl = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
         final areEnabled = await androidImpl?.areNotificationsEnabled();
         if (areEnabled != null) return areEnabled;
       }
@@ -152,8 +161,10 @@ class NotificationService {
     if (!Platform.isAndroid && !Platform.isIOS) return false;
     try {
       if (Platform.isAndroid) {
-        final androidImpl =
-            _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        final androidImpl = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
 
         // On Android 13+, this triggers the system runtime permission dialog
         final granted = await androidImpl?.requestNotificationsPermission();
@@ -195,7 +206,8 @@ class NotificationService {
     try {
       if (!_isInitialized) await init();
       final fmt = NumberFormat('#,##0.##', 'ar');
-      final body = 'رصيد $walletName نزل عن ${fmt.format(threshold)} ر.ي (الرصيد الحالي: ${fmt.format(currentBalance)} ر.ي)';
+      final body =
+          'رصيد $walletName نزل عن ${fmt.format(threshold)} ر.ي (الرصيد الحالي: ${fmt.format(currentBalance)} ر.ي)';
       const title = '⚠️ تنبيه: رصيد منخفض';
 
       final androidDetails = AndroidNotificationDetails(
@@ -227,12 +239,7 @@ class NotificationService {
         iOS: darwinDetails,
       );
 
-      await _plugin.show(
-        lowBalanceNotificationId,
-        title,
-        body,
-        details,
-      );
+      await _plugin.show(lowBalanceNotificationId, title, body, details);
     } catch (e) {
       debugPrint('showLowBalanceAlert error: $e');
     }
@@ -330,13 +337,7 @@ class NotificationService {
       );
 
       final notifId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await _plugin.show(
-        notifId,
-        title,
-        body,
-        details,
-        payload: payload,
-      );
+      await _plugin.show(notifId, title, body, details, payload: payload);
     } catch (e) {
       debugPrint('showTransactionAlert error: $e');
     }
@@ -359,7 +360,8 @@ class NotificationService {
     final balanceText = currentBalance != null
         ? ' (الرصيد الحالي: ${NumberFormat('#,##0.##', 'ar').format(currentBalance)} $currencyCode)'
         : '';
-    final body = 'تم تسجيل ${isExpense ? "مصروف" : "إيداع"} بمبلغ $formattedAmount $currencyCode في $walletName$balanceText';
+    final body =
+        'تم تسجيل ${isExpense ? "مصروف" : "إيداع"} بمبلغ $formattedAmount $currencyCode في $walletName$balanceText';
 
     await showTransactionAlert(title: title, body: body);
   }
@@ -405,16 +407,9 @@ class NotificationService {
       );
 
       final notifId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      await _plugin.show(
-        notifId,
-        title,
-        body,
-        details,
-        payload: payload,
-      );
+      await _plugin.show(notifId, title, body, details, payload: payload);
     } catch (e) {
       debugPrint('showRemoteNotification error: $e');
     }
   }
 }
-

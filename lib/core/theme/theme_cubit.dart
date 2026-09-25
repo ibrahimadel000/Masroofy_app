@@ -7,8 +7,8 @@ class ThemeCubit extends Cubit<ThemeMode> {
   static const String keyThemeMode = 'themeMode';
 
   ThemeCubit({required SharedPreferences prefs})
-      : _prefs = prefs,
-        super(_getInitialThemeMode(prefs));
+    : _prefs = prefs,
+      super(_getInitialThemeMode(prefs));
 
   static ThemeMode _getInitialThemeMode(SharedPreferences prefs) {
     final modeStr = prefs.getString(keyThemeMode);
@@ -42,6 +42,7 @@ class ThemeCubit extends Cubit<ThemeMode> {
   bool get isDarkMode {
     if (state == ThemeMode.dark) return true;
     if (state == ThemeMode.light) return false;
-    return WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+        Brightness.dark;
   }
 }

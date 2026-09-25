@@ -25,6 +25,14 @@ class SmsCandidateItem {
     this.targetWalletId,
     this.isSelected = true,
   });
+
+  SmsCandidateItem copyWith({String? targetWalletId, bool? isSelected}) {
+    return SmsCandidateItem(
+      data: data,
+      targetWalletId: targetWalletId ?? this.targetWalletId,
+      isSelected: isSelected ?? this.isSelected,
+    );
+  }
 }
 
 /// Top-level background message handler for telephony
@@ -41,6 +49,36 @@ class SmsService {
   const SmsService({this.telephony});
 
   Telephony get _instance => telephony ?? Telephony.instance;
+
+  /// SMS automation is opt-in. A missing preference must never look enabled.
+  static bool isAutoImportEnabled(
+    SharedPreferences prefs, {
+    required String uid,
+  }) {
+    final userKey = '${uid}_smsAutoImportEnabled';
+    if (prefs.containsKey(userKey)) {
+      return prefs.getBool(userKey) ?? false;
+    }
+    if (uid == 'guest') {
+      return prefs.getBool('smsAutoImportEnabled') ?? false;
+    }
+    return false;
+  }
+
+  /// Keep Flutter and the native Android receiver on the same explicit value.
+  static Future<void> setAutoImportEnabled(
+    SharedPreferences prefs, {
+    required String uid,
+    required bool value,
+  }) async {
+    if (uid.isNotEmpty) {
+      await prefs.setString('current_user_id', uid);
+      await prefs.setBool('${uid}_smsAutoImportEnabled', value);
+    }
+    // Native Android reads this alias if the active-user key is not available
+    // during a cold-start broadcast. Keep it equal to the active user's choice.
+    await prefs.setBool('smsAutoImportEnabled', value);
+  }
 
   /// Check if SMS permissions (RECEIVE_SMS & READ_SMS) are granted on Android
   Future<bool> hasPermission() async {
@@ -69,7 +107,7 @@ class SmsService {
   }
 
   /// Universal smart wallet matching
-  /// Matches wallet by: ID -> Type -> Name contains -> Sender ID in name -> Favorite wallet -> First wallet
+  /// Matches only by explicit ID, type, name, or sender mapping; otherwise returns null.
   static Wallet? findMatchingWallet({
     required List<Wallet> userWallets,
     required String walletType,
@@ -84,7 +122,9 @@ class SmsService {
     if (byId.isNotEmpty) return byId.first;
 
     // 2. Exact match on wallet type
-    final byType = userWallets.where((w) => w.type.toLowerCase().trim() == cleanType).toList();
+    final byType = userWallets
+        .where((w) => w.type.toLowerCase().trim() == cleanType)
+        .toList();
     if (byType.isNotEmpty) return byType.first;
 
     // 3. Match wallet name with walletType or template details
@@ -95,19 +135,18 @@ class SmsService {
         final tmplName = template.walletNameAr.toLowerCase().trim();
         if (name.contains(tmplName) || tmplName.contains(name)) return true;
         for (final id in template.senderIds) {
-          if (name.contains(id.toLowerCase()) || id.toLowerCase().contains(name)) return true;
+          if (name.contains(id.toLowerCase()) ||
+              id.toLowerCase().contains(name)) {
+            return true;
+          }
         }
       }
       return false;
     }).toList();
     if (byName.isNotEmpty) return byName.first;
 
-    // 4. Fallback to favorite wallet
-    final favorites = userWallets.where((w) => w.isFavorite).toList();
-    if (favorites.isNotEmpty) return favorites.first;
-
-    // 5. Fallback to first wallet
-    return userWallets.first;
+    // Never guess a destination for financial data.
+    return null;
   }
 
   /// Scan inbox, filter by registered wallet senders only, dedupe, and return candidates
@@ -122,16 +161,12 @@ class SmsService {
     final List<SmsCandidateItem> results = [];
 
     try {
-      final List<SmsMessage> messages = await _instance.getInboxSms(
-        columns: [
-          SmsColumn.ADDRESS,
-          SmsColumn.BODY,
-          SmsColumn.DATE,
-        ],
-        sortOrder: [
-          OrderBy(SmsColumn.DATE, sort: Sort.DESC),
-        ],
-      );
+      final List<SmsMessage> messages = await _instance
+          .getInboxSms(
+            columns: [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
+            sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
+          )
+          .timeout(const Duration(seconds: 15));
 
       // CRITICAL FIX: Sort descending by date in Dart to overcome Android ContentResolver sorting bugs
       messages.sort((a, b) => (b.date ?? 0).compareTo(a.date ?? 0));
@@ -146,7 +181,11 @@ class SmsService {
             : DateTime.now();
 
         // 1. Strict Privacy Filter: Skip personal / unregistered senders
-        final template = SmsSenderRegistry.findTemplate(address, customMappings, body);
+        final template = SmsSenderRegistry.findTemplate(
+          address,
+          customMappings,
+          body,
+        );
         if (template == null) continue;
 
         // 2. Parse transaction details
@@ -183,12 +222,12 @@ class SmsService {
           SmsCandidateItem(
             data: parsed,
             targetWalletId: matchedWalletId,
-            isSelected: true,
+            isSelected: matchedWalletId != null,
           ),
         );
       }
     } catch (_) {
-      // Return whatever was collected or empty list
+      rethrow;
     }
 
     return results;
@@ -211,7 +250,11 @@ class SmsService {
       final body = message.body ?? '';
       if (sender.isEmpty || body.isEmpty) return null;
 
-      final template = SmsSenderRegistry.findTemplate(sender, customMappings, body);
+      final template = SmsSenderRegistry.findTemplate(
+        sender,
+        customMappings,
+        body,
+      );
       if (template == null) return null;
 
       final date = message.date != null
@@ -228,10 +271,15 @@ class SmsService {
 
       if (_inFlightKeys.contains(parsed.smsKey)) return null;
       _inFlightKeys.add(parsed.smsKey);
-      Future.delayed(const Duration(seconds: 5), () => _inFlightKeys.remove(parsed.smsKey));
+      Future.delayed(
+        const Duration(seconds: 5),
+        () => _inFlightKeys.remove(parsed.smsKey),
+      );
 
       final wRepo = walletRepository ?? WalletRepository();
-      final currentWallets = wRepo.getWallets().isNotEmpty ? wRepo.getWallets() : userWallets;
+      final currentWallets = wRepo.getWallets().isNotEmpty
+          ? wRepo.getWallets()
+          : userWallets;
       if (currentWallets.isEmpty) return null;
 
       final matchedWallet = findMatchingWallet(
@@ -260,9 +308,7 @@ class SmsService {
 
       final prefs = await SharedPreferences.getInstance();
       final uid = DatabaseService.currentUserId ?? 'guest';
-      final autoImport = prefs.getBool('${uid}_smsAutoImportEnabled') ??
-          prefs.getBool('smsAutoImportEnabled') ??
-          true;
+      final autoImport = SmsService.isAutoImportEnabled(prefs, uid: uid);
 
       TransactionModel? tx;
 
@@ -284,7 +330,9 @@ class SmsService {
             rawSmsSender: parsed.rawSender,
           );
           await transactionRepository.saveTransaction(tx);
-          await reconcileWalletsWithLatestSms(
+          await alignWalletToStatementBalance(
+            data: parsed,
+            walletId: matchedWalletId,
             transactionRepository: transactionRepository,
             walletRepository: wRepo,
           );
@@ -307,9 +355,12 @@ class SmsService {
 
           await transactionRepository.saveTransaction(tx);
 
-          // Ground-Truth Wallet Alignment: If the transaction carries an authoritative statement balance, reconcile
+          // Apply the balance carried by this exact SMS directly. Re-parsing
+          // transaction history can miss wallet-specific balance abbreviations.
           if (parsed.balance != null) {
-            await reconcileWalletsWithLatestSms(
+            await alignWalletToStatementBalance(
+              data: parsed,
+              walletId: matchedWalletId,
               transactionRepository: transactionRepository,
               walletRepository: wRepo,
             );
@@ -318,13 +369,17 @@ class SmsService {
       }
 
       if (showNotification) {
-        final notifEnabled = prefs.getBool('${uid}_smsNotificationsEnabled') ??
+        final notifEnabled =
+            prefs.getBool('${uid}_smsNotificationsEnabled') ??
             prefs.getBool('smsNotificationsEnabled') ??
             true;
 
         if (notifEnabled) {
-          final freshWallet = wRepo.getWalletById(matchedWalletId) ?? matchedWallet;
-          final currentTxs = transactionRepository.getTransactionsByWallet(matchedWalletId);
+          final freshWallet =
+              wRepo.getWalletById(matchedWalletId) ?? matchedWallet;
+          final currentTxs = transactionRepository.getTransactionsByWallet(
+            matchedWalletId,
+          );
           final currentBal = BalanceCalculator.calculateWalletBalance(
             openingBalance: freshWallet.openingBalance,
             transactions: currentTxs,
@@ -346,7 +401,8 @@ class SmsService {
     }
   }
 
-  static const String pendingSmsQueueKey = 'mizaan_pending_background_sms_queue_v1';
+  static const String pendingSmsQueueKey =
+      'mizaan_pending_background_sms_queue_v1';
   static const String pendingRawSmsKey = 'mizaan_pending_raw_sms_v1';
 
   /// Enqueue an incoming background SMS into SharedPreferences queue for cross-isolate safety
@@ -382,15 +438,15 @@ class SmsService {
       // Ensure active user is accurately resolved
       try {
         final authUser = FirebaseAuth.instance.currentUser;
-        if (authUser != null && (DatabaseService.currentUserId == null || DatabaseService.currentUserId == 'guest')) {
+        if (authUser != null &&
+            (DatabaseService.currentUserId == null ||
+                DatabaseService.currentUserId == 'guest')) {
           await DatabaseService.switchUser(authUser.uid);
         }
       } catch (_) {}
 
       final uid = DatabaseService.currentUserId ?? 'guest';
-      final autoImport = prefs.getBool('${uid}_smsAutoImportEnabled') ??
-          prefs.getBool('smsAutoImportEnabled') ??
-          true;
+      final autoImport = SmsService.isAutoImportEnabled(prefs, uid: uid);
 
       if (!autoImport) {
         await prefs.remove(pendingRawSmsKey);
@@ -401,7 +457,9 @@ class SmsService {
       // 1. Gather messages from native Kotlin receiver queue
       final List<Map<String, dynamic>> rawNativeList = [];
       final rawNativeJson = prefs.getString(pendingRawSmsKey);
-      if (rawNativeJson != null && rawNativeJson.isNotEmpty && rawNativeJson != '[]') {
+      if (rawNativeJson != null &&
+          rawNativeJson.isNotEmpty &&
+          rawNativeJson != '[]') {
         try {
           final decoded = jsonDecode(rawNativeJson);
           if (decoded is List) {
@@ -456,7 +514,11 @@ class SmsService {
           flushedCount++;
         } else {
           // Check if it's already a duplicate or corrupt so we don't loop forever
-          if (_isCorruptOrDuplicate(map: map, txRepo: txRepo, userWallets: userWallets)) {
+          if (_isCorruptOrDuplicate(
+            map: map,
+            txRepo: txRepo,
+            userWallets: userWallets,
+          )) {
             handledNativeIndices.add(i);
           }
         }
@@ -475,7 +537,11 @@ class SmsService {
           handledDartIndices.add(i);
           flushedCount++;
         } else {
-          if (_isCorruptOrDuplicate(map: map, txRepo: txRepo, userWallets: userWallets)) {
+          if (_isCorruptOrDuplicate(
+            map: map,
+            txRepo: txRepo,
+            userWallets: userWallets,
+          )) {
             handledDartIndices.add(i);
           }
         }
@@ -484,7 +550,7 @@ class SmsService {
       // Update native queue in SharedPreferences
       final remainingNative = [
         for (int i = 0; i < rawNativeList.length; i++)
-          if (!handledNativeIndices.contains(i)) rawNativeList[i]
+          if (!handledNativeIndices.contains(i)) rawNativeList[i],
       ];
       if (remainingNative.isEmpty) {
         await prefs.remove(pendingRawSmsKey);
@@ -495,7 +561,7 @@ class SmsService {
       // Update Dart queue in SharedPreferences
       final remainingDart = [
         for (int i = 0; i < rawDartList.length; i++)
-          if (!handledDartIndices.contains(i)) jsonEncode(rawDartList[i])
+          if (!handledDartIndices.contains(i)) jsonEncode(rawDartList[i]),
       ];
       if (remainingDart.isEmpty) {
         await prefs.remove(pendingSmsQueueKey);
@@ -528,7 +594,8 @@ class SmsService {
     try {
       final sender = map['sender'] as String? ?? '';
       final body = map['body'] as String? ?? '';
-      final dateMs = map['date'] as int? ?? DateTime.now().millisecondsSinceEpoch;
+      final dateMs =
+          map['date'] as int? ?? DateTime.now().millisecondsSinceEpoch;
       final date = DateTime.fromMillisecondsSinceEpoch(dateMs);
 
       if (sender.isEmpty || body.isEmpty) return false;
@@ -577,6 +644,14 @@ class SmsService {
         rawSmsSender: parsed.rawSender,
       );
       await txRepo.saveTransaction(tx);
+      if (parsed.balance != null) {
+        await const SmsService().alignWalletToStatementBalance(
+          data: parsed,
+          walletId: matchedWallet.id,
+          transactionRepository: txRepo,
+          walletRepository: walletRepo,
+        );
+      }
       return true;
     } catch (_) {
       return false;
@@ -591,6 +666,7 @@ class SmsService {
     final sender = map['sender'] as String? ?? '';
     final body = map['body'] as String? ?? '';
     if (sender.isEmpty || body.isEmpty) return true;
+    if (SmsSenderRegistry.isBlockedSender(sender)) return true;
 
     final dateMs = map['date'] as int? ?? DateTime.now().millisecondsSinceEpoch;
     final date = DateTime.fromMillisecondsSinceEpoch(dateMs);
@@ -623,126 +699,70 @@ class SmsService {
     );
   }
 
-  /// Process an incoming message in the background isolate
-  static Future<TransactionModel?> processBackgroundIncomingSms(SmsMessage message) async {
+  /// Queue background SMS for processing on the main isolate.
+  /// Native Android owns the single user notification; Hive is never opened here.
+  static Future<TransactionModel?> processBackgroundIncomingSms(
+    SmsMessage message,
+  ) async {
     WidgetsFlutterBinding.ensureInitialized();
     try {
       final sender = message.address ?? '';
       final body = message.body ?? '';
       if (sender.isEmpty || body.isEmpty) return null;
-
-      final template = SmsSenderRegistry.findTemplate(sender, null, body);
-      if (template == null) return null;
-
-      final date = message.date != null
-          ? DateTime.fromMillisecondsSinceEpoch(message.date!)
-          : DateTime.now();
-
-      final parsed = SmsSenderRegistry.parseMessage(
-        sender: sender,
-        body: body,
-        date: date,
-      );
-      if (parsed == null) return null;
-
-      final prefs = await SharedPreferences.getInstance();
-      final uid = prefs.getString('current_user_id') ?? 'guest';
-      final autoImport = prefs.getBool('${uid}_smsAutoImportEnabled') ??
-          prefs.getBool('smsAutoImportEnabled') ??
-          true;
-      final notifEnabled = prefs.getBool('${uid}_smsNotificationsEnabled') ??
-          prefs.getBool('smsNotificationsEnabled') ??
-          true;
-
-      // 1. Cross-isolate safety: Only enqueue if auto-import is enabled
-      if (autoImport) {
-        await enqueuePendingSms(
-          sender: sender,
-          body: body,
-          timestamp: date.millisecondsSinceEpoch,
-        );
-      }
-
-      if (_inFlightKeys.contains(parsed.smsKey)) return null;
-      _inFlightKeys.add(parsed.smsKey);
-      Future.delayed(const Duration(seconds: 5), () => _inFlightKeys.remove(parsed.smsKey));
-
-      // 2. Immediate local notification to user only if enabled
-      if (notifEnabled) {
-        try {
-          final notifService = NotificationService();
-          await notifService.init();
-          await sendTransactionNotification(
-            notificationService: notifService,
-            data: parsed,
-            walletName: template.walletNameAr,
-            currencyCode: 'YER',
-            currentWalletBalance: parsed.balance,
-          );
-        } catch (_) {}
-      }
-
-      // 3. Attempt direct Hive write only if auto-import is enabled
-      if (!autoImport) return null;
-
-      if (!DatabaseService.isInitialized) {
-        await DatabaseService.init(initialUserId: uid);
-      }
-
-      final txRepo = TransactionRepository();
-      final walletRepo = WalletRepository();
-      final userWallets = walletRepo.getWallets();
-      if (userWallets.isEmpty) return null;
-
-      final matchedWallet = findMatchingWallet(
-        userWallets: userWallets,
-        walletType: parsed.walletType,
-        template: template,
-      );
-      if (matchedWallet == null) return null;
-
-      final matchedWalletId = matchedWallet.id;
-
-      if (txRepo.isDuplicateSms(
-        smsKey: parsed.smsKey,
-        referenceNumber: parsed.referenceNumber,
-        rawSmsBody: parsed.rawBody,
-        walletId: matchedWalletId,
-        amount: parsed.amount,
-        type: parsed.type,
-        date: parsed.date,
-      )) {
+      if (SmsSenderRegistry.findTemplate(sender, null, body) == null) {
         return null;
       }
-
-      final tx = TransactionModel(
-        id: 'sms_${parsed.smsKey}',
-        walletId: matchedWalletId,
-        type: parsed.type,
-        amount: parsed.amount,
-        category: parsed.category,
-        note: parsed.rawBody,
-        date: parsed.date,
-        source: 'sms',
-        smsKey: parsed.smsKey,
-        createdAt: DateTime.now(),
-        rawSmsBody: parsed.rawBody,
-        rawSmsSender: parsed.rawSender,
+      final prefs = await SharedPreferences.getInstance();
+      final uid = prefs.getString('current_user_id') ?? 'guest';
+      if (!SmsService.isAutoImportEnabled(prefs, uid: uid)) return null;
+      await enqueuePendingSms(
+        sender: sender,
+        body: body,
+        timestamp: message.date ?? DateTime.now().millisecondsSinceEpoch,
       );
+    } catch (_) {}
+    return null;
+  }
 
-      await txRepo.saveTransaction(tx);
+  /// Aligns the calculated wallet total to the authoritative balance carried by
+  /// one parsed SMS, while preserving transactions that occurred after it.
+  Future<bool> alignWalletToStatementBalance({
+    required ParsedSmsData data,
+    required String walletId,
+    required TransactionRepository transactionRepository,
+    required WalletRepository walletRepository,
+  }) async {
+    final statementBalance = data.balance;
+    if (statementBalance == null) return false;
 
-      if (parsed.balance != null) {
-        await const SmsService().reconcileWalletsWithLatestSms(
-          transactionRepository: txRepo,
-          walletRepository: walletRepo,
-        );
+    final wallet = walletRepository.getWalletById(walletId);
+    if (wallet == null) return false;
+    final txs = transactionRepository.getTransactionsByWallet(walletId);
+    final currentBalance = BalanceCalculator.calculateWalletBalance(
+      openingBalance: wallet.openingBalance,
+      transactions: txs,
+    );
+
+    double newerDelta = 0.0;
+    for (final tx in txs) {
+      if (!tx.date.isAfter(data.date)) continue;
+      if (tx.type == 'income') {
+        newerDelta += tx.amount;
+      } else if (tx.type == 'expense') {
+        newerDelta -= tx.amount;
+      } else if (tx.type == 'adjustment') {
+        newerDelta += tx.amount;
       }
-
-      return tx;
-    } catch (_) {
-      return null;
     }
+
+    final expectedCurrentBalance = statementBalance + newerDelta;
+    final correction = expectedCurrentBalance - currentBalance;
+    if (correction.abs() < 0.01) return false;
+
+    await walletRepository.saveWallet(
+      wallet.copyWith(openingBalance: wallet.openingBalance + correction),
+    );
+    return true;
   }
 
   /// Reconcile wallets with the latest verified SMS balance found in their transaction history
@@ -816,7 +836,10 @@ class SmsService {
   }) async {
     try {
       if (data.isBalanceOnly) {
-        final balText = AppConstants.formatCurrency(data.balance ?? currentWalletBalance ?? 0.0, currencyCode);
+        final balText = AppConstants.formatCurrency(
+          data.balance ?? currentWalletBalance ?? 0.0,
+          currencyCode,
+        );
         await notificationService.showTransactionAlert(
           title: '🔄 تحديث الرصيد - $walletName',
           body: 'تم تحديث رصيد $walletName الفعلي إلى $balText',
@@ -824,14 +847,17 @@ class SmsService {
         return;
       }
 
-      final formattedAmount = AppConstants.formatCurrency(data.amount, currencyCode);
-      final isExpense = data.type == 'expense';
-      final isPurchase = isExpense && (
-          data.category == 'بقالة' ||
-          data.category == 'مشتريات' ||
-          data.rawBody.contains('شراء') ||
-          data.rawBody.contains('مشتريات')
+      final formattedAmount = AppConstants.formatCurrency(
+        data.amount,
+        currencyCode,
       );
+      final isExpense = data.type == 'expense';
+      final isPurchase =
+          isExpense &&
+          (data.category == 'بقالة' ||
+              data.category == 'مشتريات' ||
+              data.rawBody.contains('شراء') ||
+              data.rawBody.contains('مشتريات'));
 
       final double? effectiveBal = data.balance ?? currentWalletBalance;
       final balanceText = effectiveBal != null
@@ -841,14 +867,21 @@ class SmsService {
       final String title;
       final String notifBody;
       if (isExpense) {
-        title = isPurchase ? '🛍️ عملية شراء جديدة - $walletName' : '💸 عملية خصم جديدة - $walletName';
-        notifBody = 'تم تسجيل عملية ${isPurchase ? "شراء" : "خصم"} بمبلغ $formattedAmount من $walletName$balanceText';
+        title = isPurchase
+            ? '🛍️ عملية شراء جديدة - $walletName'
+            : '💸 عملية خصم جديدة - $walletName';
+        notifBody =
+            'تم تسجيل عملية ${isPurchase ? "شراء" : "خصم"} بمبلغ $formattedAmount من $walletName$balanceText';
       } else {
         title = '💰 إيداع جديد - $walletName';
-        notifBody = 'تم تسجيل إيداع بمبلغ $formattedAmount في $walletName$balanceText';
+        notifBody =
+            'تم تسجيل إيداع بمبلغ $formattedAmount في $walletName$balanceText';
       }
 
-      await notificationService.showTransactionAlert(title: title, body: notifBody);
+      await notificationService.showTransactionAlert(
+        title: title,
+        body: notifBody,
+      );
     } catch (_) {}
   }
 
@@ -882,7 +915,8 @@ class SmsService {
             notificationService: notificationService,
             walletRepository: walletRepository,
             customMappings: customMappings,
-            showNotification: true,
+            // Native receiver owns notifications; avoid duplicate alerts.
+            showNotification: false,
           );
           if (tx != null && onTransactionReceived != null) {
             onTransactionReceived(tx);

@@ -45,7 +45,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _selectedWalletId = tx.walletId;
       _selectedDate = tx.date;
       final amt = tx.amount.abs();
-      _amountController.text = amt % 1 == 0 ? amt.toInt().toString() : amt.toString();
+      _amountController.text = amt % 1 == 0
+          ? amt.toInt().toString()
+          : amt.toString();
       if (AppConstants.categories.contains(tx.category)) {
         _selectedCategory = tx.category;
       } else {
@@ -81,7 +83,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final current = double.tryParse(currentStr) ?? 0.0;
     final updated = current + value;
     setState(() {
-      _amountController.text = updated % 1 == 0 ? updated.toInt().toString() : updated.toString();
+      _amountController.text = updated % 1 == 0
+          ? updated.toInt().toString()
+          : updated.toString();
     });
   }
 
@@ -99,19 +103,27 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         builder: (ctx) {
           return StatefulBuilder(
             builder: (modalContext, setModalState) {
-              final isToday = tempDate.year == now.year &&
+              final isToday =
+                  tempDate.year == now.year &&
                   tempDate.month == now.month &&
                   tempDate.day == now.day;
-              final isYesterday = tempDate.year == now.subtract(const Duration(days: 1)).year &&
-                  tempDate.month == now.subtract(const Duration(days: 1)).month &&
+              final isYesterday =
+                  tempDate.year == now.subtract(const Duration(days: 1)).year &&
+                  tempDate.month ==
+                      now.subtract(const Duration(days: 1)).month &&
                   tempDate.day == now.subtract(const Duration(days: 1)).day;
-              final isDayBefore = tempDate.year == now.subtract(const Duration(days: 2)).year &&
-                  tempDate.month == now.subtract(const Duration(days: 2)).month &&
+              final isDayBefore =
+                  tempDate.year == now.subtract(const Duration(days: 2)).year &&
+                  tempDate.month ==
+                      now.subtract(const Duration(days: 2)).month &&
                   tempDate.day == now.subtract(const Duration(days: 2)).day;
 
               return SafeArea(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20.0,
+                    vertical: 16.0,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -130,11 +142,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       ),
                       Row(
                         children: [
-                          const Icon(Icons.event_note_rounded, color: AppTheme.primaryColor),
+                          const Icon(
+                            Icons.event_note_rounded,
+                            color: AppTheme.primaryColor,
+                          ),
                           const SizedBox(width: 8),
                           const Text(
                             'تحديد تاريخ ووقت الحركة',
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const Spacer(),
                           IconButton(
@@ -148,7 +166,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       // Quick Date Chips
                       const Text(
                         'اختصارات سريعة للتاريخ',
-                        style: TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -156,7 +178,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         runSpacing: 8,
                         children: [
                           ActionChip(
-                            avatar: const Icon(Icons.bolt_rounded, size: 16, color: Colors.amber),
+                            avatar: const Icon(
+                              Icons.bolt_rounded,
+                              size: 16,
+                              color: Colors.amber,
+                            ),
                             label: const Text('الآن فوراً'),
                             onPressed: () {
                               setModalState(() => tempDate = DateTime.now());
@@ -169,7 +195,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             selectedColor: AppTheme.primaryColor,
                             labelStyle: TextStyle(
                               color: isToday ? Colors.white : null,
-                              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                              fontWeight: isToday
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                             ),
                             onSelected: (_) {
                               setModalState(() {
@@ -190,7 +218,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             selectedColor: AppTheme.primaryColor,
                             labelStyle: TextStyle(
                               color: isYesterday ? Colors.white : null,
-                              fontWeight: isYesterday ? FontWeight.bold : FontWeight.normal,
+                              fontWeight: isYesterday
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                             ),
                             onSelected: (_) {
                               final y = now.subtract(const Duration(days: 1));
@@ -211,7 +241,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             selectedColor: AppTheme.primaryColor,
                             labelStyle: TextStyle(
                               color: isDayBefore ? Colors.white : null,
-                              fontWeight: isDayBefore ? FontWeight.bold : FontWeight.normal,
+                              fontWeight: isDayBefore
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                             ),
                             onSelected: (_) {
                               final d = now.subtract(const Duration(days: 2));
@@ -236,7 +268,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         decoration: BoxDecoration(
                           color: Theme.of(context).cardColor,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                          border: Border.all(
+                            color: Colors.grey.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -248,7 +282,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                       context: modalContext,
                                       initialDate: tempDate,
                                       firstDate: DateTime(2020),
-                                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      lastDate: DateTime.now().add(
+                                        const Duration(days: 365),
+                                      ),
                                       locale: const Locale('ar'),
                                     );
                                     if (picked != null) {
@@ -270,33 +306,53 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(8.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Row(
                                         children: [
-                                          Icon(Icons.calendar_month_rounded, size: 16, color: AppTheme.primaryColor),
+                                          Icon(
+                                            Icons.calendar_month_rounded,
+                                            size: 16,
+                                            color: AppTheme.primaryColor,
+                                          ),
                                           SizedBox(width: 6),
-                                          Text('التاريخ (اضغط للتقويم)', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                          Text(
+                                            'التاريخ (اضغط للتقويم)',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
                                         AppConstants.formatDate(tempDate),
-                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
                             ),
-                            Container(width: 1, height: 45, color: Colors.grey.withValues(alpha: 0.2)),
+                            Container(
+                              width: 1,
+                              height: 45,
+                              color: Colors.grey.withValues(alpha: 0.2),
+                            ),
                             Expanded(
                               child: InkWell(
                                 onTap: () async {
                                   try {
                                     final picked = await showTimePicker(
                                       context: modalContext,
-                                      initialTime: TimeOfDay.fromDateTime(tempDate),
+                                      initialTime: TimeOfDay.fromDateTime(
+                                        tempDate,
+                                      ),
                                     );
                                     if (picked != null) {
                                       setModalState(() {
@@ -317,19 +373,33 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(8.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Row(
                                         children: [
-                                          Icon(Icons.access_time_rounded, size: 16, color: AppTheme.primaryColor),
+                                          Icon(
+                                            Icons.access_time_rounded,
+                                            size: 16,
+                                            color: AppTheme.primaryColor,
+                                          ),
                                           SizedBox(width: 6),
-                                          Text('الوقت (اضغط للتغيير)', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                          Text(
+                                            'الوقت (اضغط للتغيير)',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
                                         AppConstants.formatTime(tempDate),
-                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -351,10 +421,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           backgroundColor: AppTheme.primaryColor,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
                         icon: const Icon(Icons.check_rounded, size: 18),
-                        label: const Text('اعتماد التاريخ والوقت', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        label: const Text(
+                          'اعتماد التاريخ والوقت',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -386,15 +464,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       orElse: () => wallets.first,
     );
 
-    final finalCategory = (_selectedCategory == 'أخرى' && _customCategoryController.text.trim().isNotEmpty)
+    final finalCategory =
+        (_selectedCategory == 'أخرى' &&
+            _customCategoryController.text.trim().isNotEmpty)
         ? _customCategoryController.text.trim()
         : _selectedCategory;
 
-    final allTransactions = context.read<TransactionsCubit>().state is TransactionsLoaded
-        ? (context.read<TransactionsCubit>().state as TransactionsLoaded).transactions
+    final allTransactions =
+        context.read<TransactionsCubit>().state is TransactionsLoaded
+        ? (context.read<TransactionsCubit>().state as TransactionsLoaded)
+              .transactions
         : <TransactionModel>[];
-    final walletTransactions =
-        allTransactions.where((tx) => tx.walletId == selectedWallet.id).toList();
+    final walletTransactions = allTransactions
+        .where((tx) => tx.walletId == selectedWallet.id)
+        .toList();
 
     final currentBalance = BalanceCalculator.calculateWalletBalance(
       openingBalance: selectedWallet.openingBalance,
@@ -406,7 +489,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Row(
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
@@ -421,13 +506,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('تعديل المبلغ', style: TextStyle(color: Colors.grey)),
+              child: const Text(
+                'تعديل المبلغ',
+                style: TextStyle(color: Colors.grey),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red.shade700,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () {
                 Navigator.pop(ctx);
@@ -459,7 +549,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         SnackBar(
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           content: Row(
             children: [
               const Icon(Icons.check_circle_rounded, color: Colors.white),
@@ -480,14 +572,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     context.read<TransactionsCubit>().addTransaction(
-          walletId: _selectedWalletId!,
-          type: _selectedType,
-          amount: amount,
-          category: category,
-          note: _noteController.text.isEmpty ? null : _noteController.text.trim(),
-          date: _selectedDate,
-          source: 'manual',
-        );
+      walletId: _selectedWalletId!,
+      type: _selectedType,
+      amount: amount,
+      category: category,
+      note: _noteController.text.isEmpty ? null : _noteController.text.trim(),
+      date: _selectedDate,
+      source: 'manual',
+    );
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -522,7 +614,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ),
       body: BlocBuilder<WalletsCubit, WalletsState>(
         builder: (context, walletsState) {
-          final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+          final wallets = walletsState is WalletsLoaded
+              ? walletsState.wallets
+              : <Wallet>[];
 
           if (wallets.isEmpty) {
             return Center(
@@ -533,87 +627,110 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   alignment: Alignment.center,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(22),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.account_balance_wallet_rounded,
-                        size: 60,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'لا توجد محافظ مسجلة بعد',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'لتسجيل حركة مالية يدوية، يلزم وجود محفظة واحدة على الأقل لخصم أو إيداع المبلغ منها.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey, fontSize: 14, height: 1.5),
-                    ),
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const AddWalletScreen()),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
                         ),
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('إضافة محفظة جديدة الآن', style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: const Icon(
+                          Icons.account_balance_wallet_rounded,
+                          size: 60,
+                          color: AppTheme.primaryColor,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await context.read<WalletsCubit>().addWallet(
-                                name: 'كاش (نقداً)',
-                                type: 'kash',
-                                colorValue: 0xFF0E7C61,
-                                iconCodePoint: Icons.payments_rounded.codePoint,
-                                openingBalance: 0.0,
-                              );
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('تم إنشاء محفظة "كاش (نقداً)" بنجاح 🎉'),
-                                backgroundColor: AppTheme.primaryColor,
+                      const SizedBox(height: 20),
+                      const Text(
+                        'لا توجد محافظ مسجلة بعد',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'لتسجيل حركة مالية يدوية، يلزم وجود محفظة واحدة على الأقل لخصم أو إيداع المبلغ منها.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 14,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AddWalletScreen(),
                               ),
                             );
-                          }
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.primaryColor,
-                          side: const BorderSide(color: AppTheme.primaryColor),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text(
+                            'إضافة محفظة جديدة الآن',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
-                        icon: const Icon(Icons.flash_on_rounded),
-                        label: const Text('إنشاء محفظة "كاش" سريعة', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await context.read<WalletsCubit>().addWallet(
+                              name: 'كاش (نقداً)',
+                              type: 'kash',
+                              colorValue: 0xFF0E7C61,
+                              iconCodePoint: Icons.payments_rounded.codePoint,
+                              openingBalance: 0.0,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'تم إنشاء محفظة "كاش (نقداً)" بنجاح 🎉',
+                                  ),
+                                  backgroundColor: AppTheme.primaryColor,
+                                ),
+                              );
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.primaryColor,
+                            side: const BorderSide(
+                              color: AppTheme.primaryColor,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.flash_on_rounded),
+                          label: const Text(
+                            'إنشاء محفظة "كاش" سريعة',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        }
+            );
+          }
 
           _selectedWalletId ??= wallets.first.id;
 
@@ -627,347 +744,443 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!_isEditing) ...[
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.07),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.info_outline_rounded, color: AppTheme.primaryColor, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'تلميح: العمليات البنكية تُسجل تلقائياً عبر الرسائل، استخدم هذا النموذج للمصاريف النقدية (الكاش) 💵',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? Colors.white70
-                                      : Colors.black87,
-                                  fontFamily: 'Cairo',
-                                ),
-                              ),
+                    children: [
+                      if (!_isEditing) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withValues(
+                              alpha: 0.07,
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    // Income / Expense Toggle
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _selectedType = 'expense'),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: _selectedType == 'expense'
-                                      ? Colors.red.shade700
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  'صرف (مصروف)',
-                                  style: TextStyle(
-                                    color: _selectedType == 'expense'
-                                        ? Colors.white
-                                        : Colors.grey.shade700,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.2,
                               ),
                             ),
                           ),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _selectedType = 'income'),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: _selectedType == 'income'
-                                      ? AppTheme.primaryColor
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  'دخل (إيداع)',
-                                  style: TextStyle(
-                                    color: _selectedType == 'income'
-                                        ? Colors.white
-                                        : Colors.grey.shade700,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Amount Field
-                    TextFormField(
-                      controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      textInputAction: TextInputAction.next,
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) {
-                          return 'يرجى إدخال المبلغ';
-                        }
-                        final normalized = _normalizeNumber(val);
-                        final parsed = double.tryParse(normalized);
-                        if (parsed == null || parsed <= 0) {
-                          return 'يرجى إدخال مبلغ صحيح أكبر من الصفر';
-                        }
-                        return null;
-                      },
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      decoration: InputDecoration(
-                        labelText: 'المبلغ',
-                        prefixIcon: const Icon(Icons.attach_money_rounded),
-                        suffixText: 'ر.ي',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Quick Amount Chips
-                    Wrap(
-                      spacing: 8.0,
-                      runSpacing: 4.0,
-                      children: [500.0, 1000.0, 2000.0, 5000.0, 10000.0].map((val) {
-                        return ActionChip(
-                          avatar: const Icon(Icons.add_rounded, size: 15, color: AppTheme.primaryColor),
-                          label: Text(
-                            AppConstants.formatCurrency(val),
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                          ),
-                          onPressed: () => _addQuickAmount(val),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Wallet Dropdown
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedWalletId,
-                      items: wallets.map((w) {
-                        final txs = (context.read<TransactionsCubit>().state is TransactionsLoaded)
-                            ? (context.read<TransactionsCubit>().state as TransactionsLoaded).transactions.where((t) => t.walletId == w.id).toList()
-                            : <TransactionModel>[];
-                        final bal = BalanceCalculator.calculateWalletBalance(
-                          openingBalance: w.openingBalance,
-                          transactions: txs,
-                        );
-                        return DropdownMenuItem<String>(
-                          value: w.id,
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              CircleAvatar(
-                                radius: 12,
-                                backgroundColor: Color(w.colorValue),
-                                child: Icon(
-                                  AppConstants.getWalletIcon(w.iconCodePoint),
-                                  size: 14,
-                                  color: Colors.white,
-                                ),
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                color: AppTheme.primaryColor,
+                                size: 18,
                               ),
-                              const SizedBox(width: 10),
-                              Text(w.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              const SizedBox(width: 10),
-                              Text(
-                                '(${AppConstants.formatCurrency(bal, w.currencyCode)})',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: bal < 0 ? Colors.red : Colors.grey.shade600,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'تلميح: العمليات البنكية تُسجل تلقائياً عبر الرسائل، استخدم هذا النموذج للمصاريف النقدية (الكاش) 💵',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color:
+                                        Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.white70
+                                        : Colors.black87,
+                                    fontFamily: 'Cairo',
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedWalletId = val);
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'المحفظة المعنية',
-                        prefixIcon: const Icon(Icons.account_balance_wallet_outlined),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Category Chips
-                    const Text(
-                      'الفئة',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8.0,
-                      runSpacing: 8.0,
-                      children: AppConstants.categories.map((cat) {
-                        final isSelected = _selectedCategory == cat;
-                        return ChoiceChip(
-                          avatar: Icon(
-                            AppConstants.getCategoryIcon(cat),
-                            size: 18,
-                            color: isSelected ? Colors.white : AppTheme.primaryColor,
-                          ),
-                          label: Text(cat),
-                          selected: isSelected,
-                          selectedColor: AppTheme.primaryColor,
-                          labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : null,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          ),
-                          onSelected: (selected) {
-                            if (selected) setState(() => _selectedCategory = cat);
-                          },
-                        );
-                      }).toList(),
-                    ),
-
-                    // Custom category input if "أخرى" is selected
-                    if (_selectedCategory == 'أخرى') ...[
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _customCategoryController,
-                        decoration: InputDecoration(
-                          labelText: 'اسم الفئة المخصصة (اختياري)',
-                          hintText: 'مثال: سلفة، هدايا، صيانة',
-                          prefixIcon: const Icon(Icons.label_outline_rounded),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                         ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 20),
-
-                    // Note / Description Field
-                    TextFormField(
-                      controller: _noteController,
-                      textInputAction: TextInputAction.done,
-                      decoration: InputDecoration(
-                        labelText: 'بيان أو وصف الحركة (اختياري)',
-                        hintText: 'مثال: غداء عمل، مقاضي البيت، تاكسي',
-                        prefixIcon: const Icon(Icons.note_alt_outlined),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Date Picker
-                    InkWell(
-                      onTap: _pickDate,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ],
+                      // Income / Expense Toggle
+                      Container(
+                        padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                          color: Colors.grey.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                Icons.calendar_month_rounded,
-                                size: 20,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'التاريخ والوقت',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${AppConstants.formatDate(_selectedDate)}  •  ${AppConstants.formatTime(_selectedDate)}',
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'تغيير',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => _selectedType = 'expense'),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
                                   ),
-                                  SizedBox(width: 2),
-                                  Icon(Icons.keyboard_arrow_down_rounded, size: 16),
-                                ],
+                                  decoration: BoxDecoration(
+                                    color: _selectedType == 'expense'
+                                        ? Colors.red.shade700
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'صرف (مصروف)',
+                                    style: TextStyle(
+                                      color: _selectedType == 'expense'
+                                          ? Colors.white
+                                          : Colors.grey.shade700,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => _selectedType = 'income'),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _selectedType == 'income'
+                                        ? AppTheme.primaryColor
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'دخل (إيداع)',
+                                    style: TextStyle(
+                                      color: _selectedType == 'income'
+                                          ? Colors.white
+                                          : Colors.grey.shade700,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
+                      const SizedBox(height: 20),
 
-                    // Submit Button
-                    ElevatedButton(
-                      onPressed: () => _submitTransaction(wallets),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _selectedType == 'expense'
-                            ? Colors.red.shade700
-                            : AppTheme.primaryColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                      // Amount Field
+                      TextFormField(
+                        controller: _amountController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
                         ),
-                        elevation: 2,
+                        textInputAction: TextInputAction.next,
+                        validator: (val) {
+                          if (val == null || val.trim().isEmpty) {
+                            return 'يرجى إدخال المبلغ';
+                          }
+                          final normalized = _normalizeNumber(val);
+                          final parsed = double.tryParse(normalized);
+                          if (parsed == null || parsed <= 0) {
+                            return 'يرجى إدخال مبلغ صحيح أكبر من الصفر';
+                          }
+                          return null;
+                        },
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'المبلغ',
+                          prefixIcon: const Icon(Icons.attach_money_rounded),
+                          suffixText: 'ر.ي',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
                       ),
-                      child: Text(
-                        _isEditing
-                            ? 'حفظ التعديلات'
-                            : (_selectedType == 'expense' ? 'تسجيل المصروف' : 'تسجيل الدخل'),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      const SizedBox(height: 10),
+
+                      // Quick Amount Chips
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        children: [500.0, 1000.0, 2000.0, 5000.0, 10000.0].map((
+                          val,
+                        ) {
+                          return ActionChip(
+                            avatar: const Icon(
+                              Icons.add_rounded,
+                              size: 15,
+                              color: AppTheme.primaryColor,
+                            ),
+                            label: Text(
+                              AppConstants.formatCurrency(val),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onPressed: () => _addQuickAmount(val),
+                          );
+                        }).toList(),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+
+                      // Wallet Dropdown
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedWalletId,
+                        items: wallets.map((w) {
+                          final txs =
+                              (context.read<TransactionsCubit>().state
+                                  is TransactionsLoaded)
+                              ? (context.read<TransactionsCubit>().state
+                                        as TransactionsLoaded)
+                                    .transactions
+                                    .where((t) => t.walletId == w.id)
+                                    .toList()
+                              : <TransactionModel>[];
+                          final bal = BalanceCalculator.calculateWalletBalance(
+                            openingBalance: w.openingBalance,
+                            transactions: txs,
+                          );
+                          return DropdownMenuItem<String>(
+                            value: w.id,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: Color(w.colorValue),
+                                  child: Icon(
+                                    AppConstants.getWalletIcon(w.iconCodePoint),
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  w.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  '(${AppConstants.formatCurrency(bal, w.currencyCode)})',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: bal < 0
+                                        ? Colors.red
+                                        : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _selectedWalletId = val);
+                          }
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'المحفظة المعنية',
+                          prefixIcon: const Icon(
+                            Icons.account_balance_wallet_outlined,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Category Chips
+                      const Text(
+                        'الفئة',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children: AppConstants.categories.map((cat) {
+                          final isSelected = _selectedCategory == cat;
+                          return ChoiceChip(
+                            avatar: Icon(
+                              AppConstants.getCategoryIcon(cat),
+                              size: 18,
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppTheme.primaryColor,
+                            ),
+                            label: Text(cat),
+                            selected: isSelected,
+                            selectedColor: AppTheme.primaryColor,
+                            labelStyle: TextStyle(
+                              color: isSelected ? Colors.white : null,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(() => _selectedCategory = cat);
+                              }
+                            },
+                          );
+                        }).toList(),
+                      ),
+
+                      // Custom category input if "أخرى" is selected
+                      if (_selectedCategory == 'أخرى') ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _customCategoryController,
+                          decoration: InputDecoration(
+                            labelText: 'اسم الفئة المخصصة (اختياري)',
+                            hintText: 'مثال: سلفة، هدايا، صيانة',
+                            prefixIcon: const Icon(Icons.label_outline_rounded),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 20),
+
+                      // Note / Description Field
+                      TextFormField(
+                        controller: _noteController,
+                        textInputAction: TextInputAction.done,
+                        decoration: InputDecoration(
+                          labelText: 'بيان أو وصف الحركة (اختياري)',
+                          hintText: 'مثال: غداء عمل، مقاضي البيت، تاكسي',
+                          prefixIcon: const Icon(Icons.note_alt_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Date Picker
+                      InkWell(
+                        onTap: _pickDate,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            border: Border.all(
+                              color: Colors.grey.withValues(alpha: 0.3),
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.calendar_month_rounded,
+                                  size: 20,
+                                  color: AppTheme.primaryColor,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'التاريخ والوقت',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${AppConstants.formatDate(_selectedDate)}  •  ${AppConstants.formatTime(_selectedDate)}',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'تغيير',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    SizedBox(width: 2),
+                                    Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      size: 16,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Submit Button
+                      ElevatedButton(
+                        onPressed: () => _submitTransaction(wallets),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _selectedType == 'expense'
+                              ? Colors.red.shade700
+                              : AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: Text(
+                          _isEditing
+                              ? 'حفظ التعديلات'
+                              : (_selectedType == 'expense'
+                                    ? 'تسجيل المصروف'
+                                    : 'تسجيل الدخل'),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
       ),
     );
   }

@@ -21,7 +21,8 @@ import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
 import 'package:mizaan/features/wallets/cubit/wallets_cubit.dart';
 
 class MizaanApp extends StatelessWidget {
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
   static bool _isBiometricGateOpen = false;
 
   final SharedPreferences prefs;
@@ -45,19 +46,25 @@ class MizaanApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<ThemeCubit>(
-          create: (_) => ThemeCubit(prefs: prefs),
-        ),
+        BlocProvider<ThemeCubit>(create: (_) => ThemeCubit(prefs: prefs)),
         BlocProvider<AuthCubit>(
-          create: (_) => AuthCubit(
-            authRepository: authRepository ?? AuthRepository(),
-            biometricService: biometricService ?? BiometricService(),
-            prefs: prefs,
-          )..checkAuthStatus(),
+          create: (_) {
+            final cubit = AuthCubit(
+              authRepository: authRepository ?? AuthRepository(),
+              biometricService: biometricService ?? BiometricService(),
+              prefs: prefs,
+            );
+            if (homeOverride == null) {
+              cubit.checkAuthStatus();
+            }
+            return cubit;
+          },
         ),
         BlocProvider<WalletsCubit>(
           create: (_) => WalletsCubit(
             repository: walletRepository ?? WalletRepository(),
+            transactionRepository:
+                transactionRepository ?? TransactionRepository(),
           ),
         ),
         BlocProvider<TransactionsCubit>(
@@ -71,13 +78,15 @@ class MizaanApp extends StatelessWidget {
         BlocProvider<SmsCubit>(
           create: (_) => SmsCubit(
             smsService: const SmsService(),
-            transactionRepository: transactionRepository ?? TransactionRepository(),
+            transactionRepository:
+                transactionRepository ?? TransactionRepository(),
             notificationService: NotificationService(),
           ),
         ),
         BlocProvider<StatsCubit>(
           create: (_) => StatsCubit(
-            transactionRepository: transactionRepository ?? TransactionRepository(),
+            transactionRepository:
+                transactionRepository ?? TransactionRepository(),
             walletRepository: walletRepository ?? WalletRepository(),
           ),
         ),
@@ -87,6 +96,9 @@ class MizaanApp extends StatelessWidget {
           if (authState is Authenticated) {
             final uid = authState.isGuest ? 'guest' : authState.user?.uid;
             await DatabaseService.switchUser(uid);
+            final activeTxRepo =
+                transactionRepository ?? TransactionRepository();
+            await activeTxRepo.purgeBlockedSenderTransactions();
             if (context.mounted) {
               context.read<WalletsCubit>().loadWallets();
               context.read<TransactionsCubit>().loadTransactions();
@@ -96,9 +108,12 @@ class MizaanApp extends StatelessWidget {
                 final wRepo = walletRepository ?? WalletRepository();
                 final txRepo = transactionRepository ?? TransactionRepository();
                 wRepo.syncFromFirestore().then((_) {
-                  if (context.mounted) context.read<WalletsCubit>().loadWallets();
+                  if (context.mounted) {
+                    context.read<WalletsCubit>().loadWallets();
+                  }
                 });
-                txRepo.syncFromFirestore().then((_) {
+                txRepo.syncFromFirestore().then((_) async {
+                  await txRepo.purgeBlockedSenderTransactions();
                   if (context.mounted) {
                     context.read<TransactionsCubit>().loadTransactions();
                     context.read<StatsCubit>().loadStats();
@@ -112,13 +127,14 @@ class MizaanApp extends StatelessWidget {
             context.read<StatsCubit>().reset();
             context.read<SmsCubit>().reset();
           } else if (authState is BiometricRequired) {
-            if (!MizaanApp._isBiometricGateOpen && MizaanApp.navigatorKey.currentState != null) {
+            if (!MizaanApp._isBiometricGateOpen &&
+                MizaanApp.navigatorKey.currentState != null) {
               MizaanApp._isBiometricGateOpen = true;
               MizaanApp.navigatorKey.currentState!
                   .pushNamed(AppRoutes.biometricGate)
                   .then((_) {
-                MizaanApp._isBiometricGateOpen = false;
-              });
+                    MizaanApp._isBiometricGateOpen = false;
+                  });
             }
           }
         },
@@ -132,10 +148,7 @@ class MizaanApp extends StatelessWidget {
               darkTheme: AppTheme.darkTheme,
               themeMode: themeMode,
               locale: const Locale('ar'),
-              supportedLocales: const [
-                Locale('ar'),
-                Locale('en'),
-              ],
+              supportedLocales: const [Locale('ar'), Locale('en')],
               localizationsDelegates: const [
                 GlobalMaterialLocalizations.delegate,
                 GlobalWidgetsLocalizations.delegate,
@@ -153,11 +166,14 @@ class MizaanApp extends StatelessWidget {
                   data: clampedMediaQuery,
                   child: Directionality(
                     textDirection: TextDirection.rtl,
-                    child: _AppLifecycleGate(child: child ?? const SizedBox.shrink()),
+                    child: _AppLifecycleGate(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 );
               },
-              onGenerateRoute: (settings) => AppRoutes.onGenerateRoute(settings, prefs),
+              onGenerateRoute: (settings) =>
+                  AppRoutes.onGenerateRoute(settings, prefs),
               home: homeOverride ?? SplashScreen(prefs: prefs),
             );
           },
@@ -175,7 +191,8 @@ class _AppLifecycleGate extends StatefulWidget {
   State<_AppLifecycleGate> createState() => _AppLifecycleGateState();
 }
 
-class _AppLifecycleGateState extends State<_AppLifecycleGate> with WidgetsBindingObserver {
+class _AppLifecycleGateState extends State<_AppLifecycleGate>
+    with WidgetsBindingObserver {
   DateTime? _pausedTime;
 
   @override
@@ -205,13 +222,21 @@ class _AppLifecycleGateState extends State<_AppLifecycleGate> with WidgetsBindin
         // Lock after 10 seconds of being in the background
         if (elapsed.inSeconds >= 10 && mounted) {
           final authCubit = context.read<AuthCubit>();
-          authCubit.lockSession();
+          _secureResumedSession(authCubit);
         }
       }
     }
   }
 
+  Future<void> _secureResumedSession(AuthCubit authCubit) async {
+    await authCubit.lockSession();
+    if (!mounted || authCubit.state is! Unauthenticated) return;
+    MizaanApp.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) => widget.child;
 }
-

@@ -14,7 +14,8 @@ class BiometricGateScreen extends StatefulWidget {
   State<BiometricGateScreen> createState() => _BiometricGateScreenState();
 }
 
-class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTickerProviderStateMixin {
+class _BiometricGateScreenState extends State<BiometricGateScreen>
+    with SingleTickerProviderStateMixin {
   bool _isAuthenticating = false;
   String? _errorMessage;
   late AnimationController _pulseController;
@@ -54,20 +55,16 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
 
     if (mounted) {
       setState(() => _isAuthenticating = false);
-      if (result == BiometricAuthResult.success) {
-        if (Navigator.canPop(context)) {
-          Navigator.pop(context);
-        } else {
-          Navigator.pushReplacementNamed(context, AppRoutes.home);
-        }
-      } else {
+      if (result != BiometricAuthResult.success) {
         String msg = 'تعذر تأكيد البصمة، يرجى المحاولة مرة أخرى';
         if (result == BiometricAuthResult.notEnrolled) {
-          msg = 'لم يتم تسجيل بصمة أو رمز قفل في هذا الجهاز. يمكنك تسجيل الخروج للدخول ببياناتك.';
+          msg =
+              'لم يتم تسجيل بصمة أو رمز قفل في هذا الجهاز. يمكنك تسجيل الخروج للدخول ببياناتك.';
         } else if (result == BiometricAuthResult.notAvailable) {
           msg = 'المصادقة بالبصمة غير مدعومة على هذا الجهاز.';
         } else if (result == BiometricAuthResult.lockedOut) {
-          msg = 'تم قفل محاولات البصمة مؤقتاً لكثرة المحاولات الخاطئة. يرجى الانتظار قليلاً أو قفل الهاتف وفتحه.';
+          msg =
+              'تم قفل محاولات البصمة مؤقتاً لكثرة المحاولات الخاطئة. يرجى الانتظار قليلاً أو قفل الهاتف وفتحه.';
         }
         setState(() {
           _errorMessage = msg;
@@ -81,8 +78,13 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('تسجيل الخروج', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('هل ترغب بتسجيل الخروج للعودة إلى شاشة تسجيل الدخول بكلمة المرور؟'),
+        title: const Text(
+          'تسجيل الخروج',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'هل ترغب بتسجيل الخروج للعودة إلى شاشة تسجيل الدخول بكلمة المرور؟',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -101,7 +103,7 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
     );
 
     if (confirm == true && mounted) {
-      await context.read<AuthCubit>().signOut();
+      await context.read<AuthCubit>().fullSignOut();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(
           context,
@@ -132,7 +134,8 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
               child: BlocBuilder<AuthCubit, AuthState>(
                 builder: (context, state) {
                   String userLabel = 'تطبيق ميزان مقفل للأمان';
-                  String userSub = 'يرجى تأكيد بصمة الإصبع أو الوجه لفتح بياناتك المالية';
+                  String userSub =
+                      'يرجى تأكيد بصمة الإصبع أو الوجه لفتح بياناتك المالية';
 
                   if (state is BiometricRequired) {
                     if (state.user != null) {
@@ -144,7 +147,8 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
                       userSub = 'أكّد هويتك للدخول إلى سجلاتك ومحافظك المالية';
                     } else if (state.isGuest) {
                       userLabel = 'حساب محلي آمن 🛡️';
-                      userSub = 'بياناتك المالية مشفرة على هذا الجهاز، أكّد بصمتك للمتابعة';
+                      userSub =
+                          'بياناتك المالية مشفرة على هذا الجهاز، أكّد بصمتك للمتابعة';
                     }
                   }
 
@@ -154,109 +158,135 @@ class _BiometricGateScreenState extends State<BiometricGateScreen> with SingleTi
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                      ScaleTransition(
-                        scale: _pulseAnimation,
-                        child: Container(
-                          width: 110,
-                          height: 110,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                              width: 2,
+                        ScaleTransition(
+                          scale: _pulseAnimation,
+                          child: Container(
+                            width: 110,
+                            height: 110,
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.12,
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppTheme.primaryColor.withValues(
+                                  alpha: 0.25,
+                                ),
+                                width: 2,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.fingerprint_rounded,
+                              size: 64,
+                              color: AppTheme.primaryColor,
                             ),
                           ),
-                          child: const Icon(
-                            Icons.fingerprint_rounded,
-                            size: 64,
-                            color: AppTheme.primaryColor,
+                        ),
+                        const SizedBox(height: 32),
+                        Text(
+                          userLabel,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
-                      Text(
-                        userLabel,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        userSub,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                          height: 1.4,
-                        ),
-                      ),
-                      if (_errorMessage != null) ...[
-                        const SizedBox(height: 24),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.red.shade200),
+                        const SizedBox(height: 10),
+                        Text(
+                          userSub,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                            height: 1.4,
                           ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  _errorMessage!,
-                                  style: TextStyle(color: Colors.red.shade800, fontSize: 13),
+                        ),
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: 24),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.error_outline_rounded,
+                                  color: Colors.red.shade700,
+                                  size: 20,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade800,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 36),
+                        ElevatedButton.icon(
+                          onPressed: _isAuthenticating ? null : _authenticate,
+                          icon: _isAuthenticating
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.fingerprint_rounded),
+                          label: Text(
+                            _isAuthenticating
+                                ? 'جاري التحقق...'
+                                : 'تأكيد البصمة',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        TextButton.icon(
+                          onPressed: _isAuthenticating ? null : _handleSignOut,
+                          icon: const Icon(
+                            Icons.logout_rounded,
+                            size: 18,
+                            color: Colors.redAccent,
+                          ),
+                          label: const Text(
+                            'تسجيل الخروج / تبديل الحساب',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ],
-                      const SizedBox(height: 36),
-                      ElevatedButton.icon(
-                        onPressed: _isAuthenticating ? null : _authenticate,
-                        icon: _isAuthenticating
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.fingerprint_rounded),
-                        label: Text(
-                          _isAuthenticating ? 'جاري التحقق...' : 'تأكيد البصمة',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryColor,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          elevation: 2,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      TextButton.icon(
-                        onPressed: _isAuthenticating ? null : _handleSignOut,
-                        icon: const Icon(Icons.logout_rounded, size: 18, color: Colors.redAccent),
-                        label: const Text(
-                          'تسجيل الخروج / تبديل الحساب',
-                          style: TextStyle(
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  );
+                },
               ),
             ),
           ),

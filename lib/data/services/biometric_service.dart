@@ -16,7 +16,7 @@ class BiometricService {
   final LocalAuthentication _auth;
 
   BiometricService({LocalAuthentication? auth})
-      : _auth = auth ?? LocalAuthentication();
+    : _auth = auth ?? LocalAuthentication();
 
   Future<bool> isBiometricsAvailable() async {
     try {
@@ -42,7 +42,9 @@ class BiometricService {
   Future<bool> authenticate({
     String localizedReason = 'يرجى تأكيد هويتك بالبصمة للمتابعة',
   }) async {
-    final result = await authenticateWithDetails(localizedReason: localizedReason);
+    final result = await authenticateWithDetails(
+      localizedReason: localizedReason,
+    );
     return result == BiometricAuthResult.success;
   }
 
@@ -60,9 +62,13 @@ class BiometricService {
         ),
       );
 
-      return authenticated ? BiometricAuthResult.success : BiometricAuthResult.failed;
+      return authenticated
+          ? BiometricAuthResult.success
+          : BiometricAuthResult.failed;
     } on PlatformException catch (e) {
-      debugPrint('Biometric PlatformException: code=${e.code}, message=${e.message}');
+      debugPrint(
+        'Biometric PlatformException: code=${e.code}, message=${e.message}',
+      );
       if (e.code == 'NotEnrolled' || e.code == 'PasscodeNotSet') {
         return BiometricAuthResult.notEnrolled;
       } else if (e.code == 'LockedOut' || e.code == 'PermanentlyLockedOut') {

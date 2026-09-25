@@ -96,15 +96,23 @@ class StatsCalculator {
     }
 
     // Filter monthly expenses and incomes for target month
-    final monthlyExpenses = filteredTransactions.where((tx) =>
-        tx.type == 'expense' &&
-        tx.date.year == year &&
-        tx.date.month == month).toList();
+    final monthlyExpenses = filteredTransactions
+        .where(
+          (tx) =>
+              tx.type == 'expense' &&
+              tx.date.year == year &&
+              tx.date.month == month,
+        )
+        .toList();
 
-    final monthlyIncomes = filteredTransactions.where((tx) =>
-        tx.type == 'income' &&
-        tx.date.year == year &&
-        tx.date.month == month).toList();
+    final monthlyIncomes = filteredTransactions
+        .where(
+          (tx) =>
+              tx.type == 'income' &&
+              tx.date.year == year &&
+              tx.date.month == month,
+        )
+        .toList();
 
     final monthlyTotalCount = monthlyExpenses.length + monthlyIncomes.length;
 
@@ -114,8 +122,10 @@ class StatsCalculator {
     double totalMonthlyExpense = 0.0;
 
     for (final tx in monthlyExpenses) {
-      categorySpending[tx.category] = (categorySpending[tx.category] ?? 0.0) + tx.amount;
-      categoryExpenseCount[tx.category] = (categoryExpenseCount[tx.category] ?? 0) + 1;
+      categorySpending[tx.category] =
+          (categorySpending[tx.category] ?? 0.0) + tx.amount;
+      categoryExpenseCount[tx.category] =
+          (categoryExpenseCount[tx.category] ?? 0) + 1;
       totalMonthlyExpense += tx.amount;
     }
 
@@ -125,8 +135,10 @@ class StatsCalculator {
     double totalMonthlyIncome = 0.0;
 
     for (final tx in monthlyIncomes) {
-      categoryIncome[tx.category] = (categoryIncome[tx.category] ?? 0.0) + tx.amount;
-      categoryIncomeCount[tx.category] = (categoryIncomeCount[tx.category] ?? 0) + 1;
+      categoryIncome[tx.category] =
+          (categoryIncome[tx.category] ?? 0.0) + tx.amount;
+      categoryIncomeCount[tx.category] =
+          (categoryIncomeCount[tx.category] ?? 0) + 1;
       totalMonthlyIncome += tx.amount;
     }
 
@@ -140,10 +152,14 @@ class StatsCalculator {
     // 2.b Previous Month comparison (Month-over-Month)
     final prevMonth = month == 1 ? 12 : month - 1;
     final prevYear = month == 1 ? year - 1 : year;
-    final prevMonthExpenses = filteredTransactions.where((tx) =>
-        tx.type == 'expense' &&
-        tx.date.year == prevYear &&
-        tx.date.month == prevMonth).toList();
+    final prevMonthExpenses = filteredTransactions
+        .where(
+          (tx) =>
+              tx.type == 'expense' &&
+              tx.date.year == prevYear &&
+              tx.date.month == prevMonth,
+        )
+        .toList();
 
     double totalPrevMonthExpense = 0.0;
     for (final tx in prevMonthExpenses) {
@@ -152,7 +168,10 @@ class StatsCalculator {
 
     double? monthlyChangePercent;
     if (totalPrevMonthExpense > 0) {
-      monthlyChangePercent = ((totalMonthlyExpense - totalPrevMonthExpense) / totalPrevMonthExpense) * 100.0;
+      monthlyChangePercent =
+          ((totalMonthlyExpense - totalPrevMonthExpense) /
+              totalPrevMonthExpense) *
+          100.0;
     } else if (totalMonthlyExpense > 0) {
       monthlyChangePercent = 100.0;
     } else {
@@ -161,9 +180,15 @@ class StatsCalculator {
 
     // 3. Weekly spending comparison
     final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-    final startOfThisWeek = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
+    final startOfThisWeek = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 6));
     final startOfLastWeek = startOfThisWeek.subtract(const Duration(days: 7));
-    final endOfLastWeek = startOfThisWeek.subtract(const Duration(milliseconds: 1));
+    final endOfLastWeek = startOfThisWeek.subtract(
+      const Duration(milliseconds: 1),
+    );
 
     double thisWeekExpense = 0.0;
     double lastWeekExpense = 0.0;
@@ -172,14 +197,16 @@ class StatsCalculator {
       if (tx.type != 'expense') continue;
       if (!tx.date.isBefore(startOfThisWeek) && !tx.date.isAfter(endOfToday)) {
         thisWeekExpense += tx.amount;
-      } else if (!tx.date.isBefore(startOfLastWeek) && !tx.date.isAfter(endOfLastWeek)) {
+      } else if (!tx.date.isBefore(startOfLastWeek) &&
+          !tx.date.isAfter(endOfLastWeek)) {
         lastWeekExpense += tx.amount;
       }
     }
 
     double? weeklyChangePercent;
     if (lastWeekExpense > 0) {
-      weeklyChangePercent = ((thisWeekExpense - lastWeekExpense) / lastWeekExpense) * 100.0;
+      weeklyChangePercent =
+          ((thisWeekExpense - lastWeekExpense) / lastWeekExpense) * 100.0;
     } else if (thisWeekExpense > 0) {
       weeklyChangePercent = 100.0;
     } else {
@@ -202,7 +229,8 @@ class StatsCalculator {
     // 6. Top Spending Wallet
     final Map<String, double> walletExpenses = {};
     for (final tx in monthlyExpenses) {
-      walletExpenses[tx.walletId] = (walletExpenses[tx.walletId] ?? 0.0) + tx.amount;
+      walletExpenses[tx.walletId] =
+          (walletExpenses[tx.walletId] ?? 0.0) + tx.amount;
     }
 
     String? topWalletName;
@@ -219,7 +247,11 @@ class StatsCalculator {
     // 7. Daily spending for the 7 days of the week
     final Map<DateTime, double> dailySpendingWeek = {};
     for (int i = 6; i >= 0; i--) {
-      final day = DateTime(now.year, now.month, now.day).subtract(Duration(days: i));
+      final day = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(Duration(days: i));
       dailySpendingWeek[day] = 0.0;
     }
 
@@ -227,7 +259,8 @@ class StatsCalculator {
       if (tx.type != 'expense') continue;
       final txDate = DateTime(tx.date.year, tx.date.month, tx.date.day);
       if (dailySpendingWeek.containsKey(txDate)) {
-        dailySpendingWeek[txDate] = (dailySpendingWeek[txDate] ?? 0.0) + tx.amount;
+        dailySpendingWeek[txDate] =
+            (dailySpendingWeek[txDate] ?? 0.0) + tx.amount;
       }
     }
 
@@ -243,7 +276,9 @@ class StatsCalculator {
       }
     }
 
-    final hasEnoughData = filteredTransactions.any((tx) => tx.type == 'expense' || tx.type == 'income');
+    final hasEnoughData = filteredTransactions.any(
+      (tx) => tx.type == 'expense' || tx.type == 'income',
+    );
 
     return StatsResult(
       categorySpending: categorySpending,

@@ -31,17 +31,17 @@ class StatsCubit extends Cubit<StatsState> {
     return DateTime(target.year, target.month, lastDay, 23, 59, 59);
   }
 
-  void loadStats({
-    DateTime? targetMonth,
-    String? walletId,
-  }) {
+  void loadStats({DateTime? targetMonth, String? walletId}) {
     try {
-      final currentLoaded = state is StatsLoaded ? (state as StatsLoaded) : null;
+      final currentLoaded = state is StatsLoaded
+          ? (state as StatsLoaded)
+          : null;
       if (currentLoaded == null) {
         emit(StatsLoading());
       }
 
-      final effectiveMonth = targetMonth ?? (currentLoaded?.selectedMonth ?? DateTime.now());
+      final effectiveMonth =
+          targetMonth ?? (currentLoaded?.selectedMonth ?? DateTime.now());
       final now = _resolveReferenceDate(effectiveMonth);
       final effectiveWalletId = walletId ?? currentLoaded?.selectedWalletId;
       final timeframe = currentLoaded?.timeframe ?? StatsTimeframe.week;
@@ -57,13 +57,15 @@ class StatsCubit extends Cubit<StatsState> {
         walletId: effectiveWalletId,
       );
 
-      emit(StatsLoaded(
-        result: result,
-        timeframe: timeframe,
-        selectedMonth: effectiveMonth,
-        selectedWalletId: effectiveWalletId,
-        activeType: activeType,
-      ));
+      emit(
+        StatsLoaded(
+          result: result,
+          timeframe: timeframe,
+          selectedMonth: effectiveMonth,
+          selectedWalletId: effectiveWalletId,
+          activeType: activeType,
+        ),
+      );
     } catch (e) {
       emit(StatsError('فشل تحميل الإحصائيات: $e'));
     }
@@ -76,7 +78,8 @@ class StatsCubit extends Cubit<StatsState> {
     String? walletId,
   }) {
     final currentLoaded = state is StatsLoaded ? (state as StatsLoaded) : null;
-    final effectiveMonth = referenceDate ?? (currentLoaded?.selectedMonth ?? DateTime.now());
+    final effectiveMonth =
+        referenceDate ?? (currentLoaded?.selectedMonth ?? DateTime.now());
     final now = _resolveReferenceDate(effectiveMonth);
     final effectiveWalletId = walletId ?? currentLoaded?.selectedWalletId;
     final timeframe = currentLoaded?.timeframe ?? StatsTimeframe.week;
@@ -89,13 +92,15 @@ class StatsCubit extends Cubit<StatsState> {
       walletId: effectiveWalletId,
     );
 
-    emit(StatsLoaded(
-      result: result,
-      timeframe: timeframe,
-      selectedMonth: effectiveMonth,
-      selectedWalletId: effectiveWalletId,
-      activeType: activeType,
-    ));
+    emit(
+      StatsLoaded(
+        result: result,
+        timeframe: timeframe,
+        selectedMonth: effectiveMonth,
+        selectedWalletId: effectiveWalletId,
+        activeType: activeType,
+      ),
+    );
   }
 
   void switchTimeframe(StatsTimeframe timeframe) {
@@ -126,10 +131,7 @@ class StatsCubit extends Cubit<StatsState> {
         walletId: walletId,
       );
 
-      emit(current.copyWith(
-        result: result,
-        selectedWalletId: () => walletId,
-      ));
+      emit(current.copyWith(result: result, selectedWalletId: () => walletId));
     } else {
       loadStats(walletId: walletId);
     }

@@ -96,7 +96,10 @@ class _IntroScreenState extends State<IntroScreen> {
             children: [
               // Top Bar: Skip button
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 8.0,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: isLastPage
@@ -127,7 +130,10 @@ class _IntroScreenState extends State<IntroScreen> {
                     final slide = _slides[index];
                     return Center(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 12.0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32.0,
+                          vertical: 12.0,
+                        ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -135,10 +141,14 @@ class _IntroScreenState extends State<IntroScreen> {
                               width: 120,
                               height: 120,
                               decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                                color: AppTheme.primaryColor.withValues(
+                                  alpha: 0.12,
+                                ),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: AppTheme.primaryColor.withValues(alpha: 0.25),
+                                  color: AppTheme.primaryColor.withValues(
+                                    alpha: 0.25,
+                                  ),
                                   width: 2,
                                 ),
                               ),
@@ -167,37 +177,53 @@ class _IntroScreenState extends State<IntroScreen> {
                                 height: 1.5,
                               ),
                             ),
-                            if (slide.badges != null && slide.badges!.isNotEmpty) ...[
+                            if (slide.badges != null &&
+                                slide.badges!.isNotEmpty) ...[
                               const SizedBox(height: 20),
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
                                 alignment: WrapAlignment.center,
-                                children: slide.badges!.map((b) => Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: AppTheme.primaryColor.withValues(alpha: 0.25),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.check_circle_rounded, size: 14, color: AppTheme.primaryColor),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        b,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.primaryColor,
+                                children: slide.badges!
+                                    .map(
+                                      (b) => Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.primaryColor
+                                              .withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color: AppTheme.primaryColor
+                                                .withValues(alpha: 0.25),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.check_circle_rounded,
+                                              size: 14,
+                                              color: AppTheme.primaryColor,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              b,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: AppTheme.primaryColor,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                )).toList(),
+                                    )
+                                    .toList(),
                               ),
                             ],
                           ],
@@ -208,69 +234,69 @@ class _IntroScreenState extends State<IntroScreen> {
                 ),
               ),
 
-            // Bottom Area: Indicators & Navigation Button
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                children: [
-                  // Page Indicator Dots
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _slides.length,
-                      (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 4.0),
-                        width: _currentIndex == index ? 28.0 : 8.0,
-                        height: 8.0,
-                        decoration: BoxDecoration(
-                          color: _currentIndex == index
-                              ? AppTheme.primaryColor
-                              : Colors.grey.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(4.0),
+              // Bottom Area: Indicators & Navigation Button
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  children: [
+                    // Page Indicator Dots
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _slides.length,
+                        (index) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                          width: _currentIndex == index ? 28.0 : 8.0,
+                          height: 8.0,
+                          decoration: BoxDecoration(
+                            color: _currentIndex == index
+                                ? AppTheme.primaryColor
+                                : Colors.grey.withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(4.0),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                  // Next / Get Started Button
-                  ElevatedButton(
-                    onPressed: () {
-                      if (isLastPage) {
-                        _completeIntro();
-                      } else {
-                        _pageController.nextPage(
-                          duration: const Duration(milliseconds: 350),
-                          curve: Curves.easeInOut,
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(52),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                    // Next / Get Started Button
+                    ElevatedButton(
+                      onPressed: () {
+                        if (isLastPage) {
+                          _completeIntro();
+                        } else {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.easeInOut,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 2,
                       ),
-                      elevation: 2,
-                    ),
-                    child: Text(
-                      isLastPage ? 'ابدأ الآن' : 'التالي',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                      child: Text(
+                        isLastPage ? 'ابدأ الآن' : 'التالي',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
   }
 }
 

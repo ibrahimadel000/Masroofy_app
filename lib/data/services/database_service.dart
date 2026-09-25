@@ -72,11 +72,17 @@ class DatabaseService {
 
     try {
       _activeWalletsBox = await Hive.openBox<Wallet>(walletsBoxName);
-      _activeTransactionsBox = await Hive.openBox<TransactionModel>(transactionsBoxName);
+      _activeTransactionsBox = await Hive.openBox<TransactionModel>(
+        transactionsBoxName,
+      );
       _activeSmsKeysBox = await Hive.openBox<bool>(smsKeysBoxName);
 
       // One-time legacy migration if the active user's box is empty
-      await _migrateLegacyIfNeeded(_activeWalletsBox!, _activeTransactionsBox!, _activeSmsKeysBox!);
+      await _migrateLegacyIfNeeded(
+        _activeWalletsBox!,
+        _activeTransactionsBox!,
+        _activeSmsKeysBox!,
+      );
     } catch (_) {
       // In test environments where Hive storage path is not initialized, don't throw
     }
@@ -102,7 +108,9 @@ class DatabaseService {
       }
 
       if (txBox.isEmpty && await Hive.boxExists(legacyBoxTransactions)) {
-        final legacyTx = await Hive.openBox<TransactionModel>(legacyBoxTransactions);
+        final legacyTx = await Hive.openBox<TransactionModel>(
+          legacyBoxTransactions,
+        );
         if (legacyTx.isNotEmpty) {
           for (final key in legacyTx.keys) {
             final val = legacyTx.get(key);
@@ -141,15 +149,21 @@ class DatabaseService {
     int migratedItems = 0;
     try {
       final guestWallets = await Hive.openBox<Wallet>('wallets_guest');
-      final guestTxs = await Hive.openBox<TransactionModel>('transactions_guest');
+      final guestTxs = await Hive.openBox<TransactionModel>(
+        'transactions_guest',
+      );
       final guestSms = await Hive.openBox<bool>('sms_keys_guest');
 
       if (guestWallets.isEmpty && guestTxs.isEmpty && guestSms.isEmpty) {
         return 0;
       }
 
-      final targetWallets = await Hive.openBox<Wallet>('wallets_$sanitizedTarget');
-      final targetTxs = await Hive.openBox<TransactionModel>('transactions_$sanitizedTarget');
+      final targetWallets = await Hive.openBox<Wallet>(
+        'wallets_$sanitizedTarget',
+      );
+      final targetTxs = await Hive.openBox<TransactionModel>(
+        'transactions_$sanitizedTarget',
+      );
       final targetSms = await Hive.openBox<bool>('sms_keys_$sanitizedTarget');
 
       for (final key in guestWallets.keys) {
@@ -191,7 +205,9 @@ class DatabaseService {
     if (!_isHiveInitialized) return;
     try {
       final guestWallets = await Hive.openBox<Wallet>('wallets_guest');
-      final guestTxs = await Hive.openBox<TransactionModel>('transactions_guest');
+      final guestTxs = await Hive.openBox<TransactionModel>(
+        'transactions_guest',
+      );
       final guestSms = await Hive.openBox<bool>('sms_keys_guest');
 
       await guestWallets.clear();
@@ -214,7 +230,9 @@ class DatabaseService {
     if (Hive.isBoxOpen(legacyBoxWallets)) {
       return Hive.box<Wallet>(legacyBoxWallets);
     }
-    throw StateError('Wallets box is not open. Call DatabaseService.switchUser() first.');
+    throw StateError(
+      'Wallets box is not open. Call DatabaseService.switchUser() first.',
+    );
   }
 
   static Box<TransactionModel> get transactionsBox {
@@ -229,7 +247,9 @@ class DatabaseService {
     if (Hive.isBoxOpen(legacyBoxTransactions)) {
       return Hive.box<TransactionModel>(legacyBoxTransactions);
     }
-    throw StateError('Transactions box is not open. Call DatabaseService.switchUser() first.');
+    throw StateError(
+      'Transactions box is not open. Call DatabaseService.switchUser() first.',
+    );
   }
 
   static Box<bool> get smsKeysBox {
@@ -244,6 +264,8 @@ class DatabaseService {
     if (Hive.isBoxOpen(legacyBoxSmsKeys)) {
       return Hive.box<bool>(legacyBoxSmsKeys);
     }
-    throw StateError('Sms keys box is not open. Call DatabaseService.switchUser() first.');
+    throw StateError(
+      'Sms keys box is not open. Call DatabaseService.switchUser() first.',
+    );
   }
 }

@@ -32,10 +32,43 @@ class SmartSmsAnalysisResult {
 class SmartSmsParser {
   /// Known currencies and symbols across GCC, Arab countries, and global markets
   static const List<String> globalCurrencies = [
-    'YER', 'SAR', 'USD', 'EUR', 'GBP', 'AED', 'EGP', 'QAR', 'KWD', 'BHD', 'OMR', 'JOD',
-    'TRY', 'CAD', 'AUD', 'INR', 'PKR', 'MAD', 'DZD', 'TND', 'IQD', 'LBP', 'SDG',
-    'ر.ي', 'ر.س', 'د.إ', 'ج.م', 'د.ك', 'ر.ق', 'د.ب', 'ر.ع', 'د.أ', 'ل.ل',
-    r'$', '€', '£', '¥'
+    'YER',
+    'SAR',
+    'USD',
+    'EUR',
+    'GBP',
+    'AED',
+    'EGP',
+    'QAR',
+    'KWD',
+    'BHD',
+    'OMR',
+    'JOD',
+    'TRY',
+    'CAD',
+    'AUD',
+    'INR',
+    'PKR',
+    'MAD',
+    'DZD',
+    'TND',
+    'IQD',
+    'LBP',
+    'SDG',
+    'ر.ي',
+    'ر.س',
+    'د.إ',
+    'ج.م',
+    'د.ك',
+    'ر.ق',
+    'د.ب',
+    'ر.ع',
+    'د.أ',
+    'ل.ل',
+    r'$',
+    '€',
+    '£',
+    '¥',
   ];
 
   /// Standard currency regex component
@@ -44,33 +77,131 @@ class SmartSmsParser {
 
   /// Balance indicator keywords in Arabic and English
   static const List<String> balanceKeywords = [
-    'رصيدك', 'الرصيد', 'رصيد', 'رص:', 'رص',
-    'الرصيد المتاح', 'الرصيد المتوفر', 'الرصيد الحالي', 'الرصيد المتبقي',
-    'available balance', 'avail bal', 'avail balance', 'current balance',
-    'cur bal', 'account balance', 'acct bal', 'new balance', 'balance is', 'balance:', 'bal:', 'bal'
+    'رصيدك',
+    'الرصيد',
+    'رصيد',
+    'رص:',
+    'رص',
+    'الرصيد المتاح',
+    'الرصيد المتوفر',
+    'الرصيد الحالي',
+    'الرصيد المتبقي',
+    'available balance',
+    'avail bal',
+    'avail balance',
+    'current balance',
+    'cur bal',
+    'account balance',
+    'acct bal',
+    'new balance',
+    'balance is',
+    'balance:',
+    'bal:',
+    'bal',
   ];
 
   /// Income indicator keywords in Arabic and English
   static const List<String> incomeKeywords = [
-    'إيداع', 'ايداع', 'الإيداع', 'الايداع', 'تم إيداع', 'تم ايداع', 'إيداع نقدي', 'ايداع نقدي',
-    'أودع', 'اودع', 'أودعت', 'اودعت', 'أودع لك', 'اودع لك',
-    'تم استلام', 'استلام', 'وارد', 'تحويل وارد', 'حوالة واردة', 'حواله وارده', 'حوالة من', 'حواله من',
-    'اضيف', 'أضيف', 'أضيفت', 'اضيفت', 'إضافة', 'اضافة', 'إضافه', 'اضافه', 'تمت إضافة', 'تمت اضافه',
-    'تغذية', 'تغذيه', 'تمت تغذية', 'تمت تغذيه', 'تم تغذية', 'تم تغذيه',
-    'قيد لحسابك', 'قيد لحسابكم', 'قيد في حسابك', 'قيد في حسابكم', 'تم قيد', 'تم القيد',
-    'تحويل لحسابك', 'تحويل لحسابكم', 'تحويل إلى محفظتك', 'تحويل الى محفظتك', 'تحويل إلى حسابك', 'تحويل الى حسابك',
-    'تحويل لك', 'وصلك تحويل', 'وصلتك حوالة', 'وصلتك حواله', 'وصلك مبلغ',
-    'شحن', 'قبض', 'توريد', 'لحسابك', 'لحسابكم',
-    'دائن', 'اشعار دائن', 'إشعار دائن', 'عكس قيد', 'لصالحك',
-    'credited', 'credit', 'deposited', 'deposit', 'received', 'transfer in', 'added'
+    'إيداع',
+    'ايداع',
+    'الإيداع',
+    'الايداع',
+    'تم إيداع',
+    'تم ايداع',
+    'إيداع نقدي',
+    'ايداع نقدي',
+    'أودع',
+    'اودع',
+    'أودعت',
+    'اودعت',
+    'أودع لك',
+    'اودع لك',
+    'تم استلام',
+    'استلام',
+    'وارد',
+    'تحويل وارد',
+    'حوالة واردة',
+    'حواله وارده',
+    'حوالة من',
+    'حواله من',
+    'اضيف',
+    'أضيف',
+    'أضيفت',
+    'اضيفت',
+    'إضافة',
+    'اضافة',
+    'إضافه',
+    'اضافه',
+    'تمت إضافة',
+    'تمت اضافه',
+    'تغذية',
+    'تغذيه',
+    'تمت تغذية',
+    'تمت تغذيه',
+    'تم تغذية',
+    'تم تغذيه',
+    'قيد لحسابك',
+    'قيد لحسابكم',
+    'قيد في حسابك',
+    'قيد في حسابكم',
+    'تم قيد',
+    'تم القيد',
+    'تحويل لحسابك',
+    'تحويل لحسابكم',
+    'تحويل إلى محفظتك',
+    'تحويل الى محفظتك',
+    'تحويل إلى حسابك',
+    'تحويل الى حسابك',
+    'تحويل لك',
+    'وصلك تحويل',
+    'وصلتك حوالة',
+    'وصلتك حواله',
+    'وصلك مبلغ',
+    'شحن',
+    'قبض',
+    'توريد',
+    'لحسابك',
+    'لحسابكم',
+    'دائن',
+    'اشعار دائن',
+    'إشعار دائن',
+    'عكس قيد',
+    'لصالحك',
+    'credited',
+    'credit',
+    'deposited',
+    'deposit',
+    'received',
+    'transfer in',
+    'added',
   ];
 
   /// Expense indicator keywords in Arabic and English
   static const List<String> expenseKeywords = [
-    'خصم', 'تم خصم', 'سداد', 'تم سداد', 'سحب', 'تم سحب',
-    'شراء', 'تم شراء', 'مشتريات', 'دفع', 'تم دفع', 'تحويل', 'تم تحويل',
-    'debited', 'debit', 'spent', 'paid', 'payment', 'withdrawn', 'purchase',
-    'transfer to', 'transferred', 'charge', 'deducted'
+    'خصم',
+    'تم خصم',
+    'سداد',
+    'تم سداد',
+    'سحب',
+    'تم سحب',
+    'شراء',
+    'تم شراء',
+    'مشتريات',
+    'دفع',
+    'تم دفع',
+    'تحويل',
+    'تم تحويل',
+    'debited',
+    'debit',
+    'spent',
+    'paid',
+    'payment',
+    'withdrawn',
+    'purchase',
+    'transfer to',
+    'transferred',
+    'charge',
+    'deducted',
   ];
 
   /// Analyze any raw SMS body from any bank in the world
@@ -82,11 +213,23 @@ class SmartSmsParser {
     final normalized = SmsSenderRegistry.normalizeDigits(body);
 
     const promoIndicators = [
-      'عرض خاص', 'عروض', 'خصومات', 'اشترك', 'باقات', 'اربح', 'جوائز', 'مبروك',
-      'مجانا', 'وفر', 'كود خصم', 'كوبون', 'باقة',
+      'عرض خاص',
+      'عروض',
+      'خصومات',
+      'اشترك',
+      'باقات',
+      'اربح',
+      'جوائز',
+      'مبروك',
+      'مجانا',
+      'وفر',
+      'كود خصم',
+      'كوبون',
+      'باقة',
     ];
     final isPromo = promoIndicators.any((kw) => normalized.contains(kw));
-    final hasBankAnchor = normalized.contains('رصيد') ||
+    final hasBankAnchor =
+        normalized.contains('رصيد') ||
         normalized.contains('حسابك') ||
         normalized.contains('محفظت') ||
         normalized.contains('مرجع') ||
@@ -121,7 +264,8 @@ class SmartSmsParser {
 
     final double? amount = operationMatch?.amount;
     final String? type = operationMatch?.type;
-    final bool isBalanceOnly = (amount == null || amount <= 0) && (balance != null);
+    final bool isBalanceOnly =
+        (amount == null || amount <= 0) && (balance != null);
 
     final finalType = isBalanceOnly ? 'adjustment' : type;
     final finalAmount = isBalanceOnly ? 0.0 : amount;
@@ -129,7 +273,10 @@ class SmartSmsParser {
     // Generate a reusable WalletSmsTemplate if analysis was successful
     WalletSmsTemplate? generatedTemplate;
     final cleanSender = (sender ?? 'bank').trim();
-    final walletType = cleanSender.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+    final walletType = cleanSender.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9_]'),
+      '_',
+    );
     final walletName = customWalletName ?? cleanSender;
 
     if (finalType != null) {
@@ -157,7 +304,10 @@ class SmartSmsParser {
   static String? detectCurrency(String text) {
     for (final curr in globalCurrencies) {
       final escaped = RegExp.escape(curr);
-      final pattern = RegExp('(?<=^|\\s|\\d)$escaped(?=\\s|\\d|\$)', caseSensitive: false);
+      final pattern = RegExp(
+        '(?<=^|\\s|\\d)$escaped(?=\\s|\\d|\$)',
+        caseSensitive: false,
+      );
       if (pattern.hasMatch(text) || text.contains(curr)) {
         return curr;
       }
@@ -171,18 +321,24 @@ class SmartSmsParser {
       // 1. Direct balance with optional qualifiers (الحالي, المتاح, المتوفر, المتبقي, etc.):
       // e.g. "رصيدك الحالي 5200 USD", "رصيدك YER 4,045.30", "الرصيد: 3000 ر.س", "Avail Bal: $1,250"
       RegExp(
-        r'(?:الرصيد|رصيدك|رصيد|رص:?|balance|avail bal|available balance|cur bal|new balance)\s*(?:حسابك)?\s*(?:الحالي|المتوفر|المتاح|المتبقي|الفعلي|الجديد|الآن|الان|طرفنا|هو|is|:|=)*[\s:]*(?:' + currencyPattern + r')?[\s:]*([0-9,]+(?:\.[0-9]+)?)',
+        r'(?:الرصيد|رصيدك|رصيد|رص:?|balance|avail bal|available balance|cur bal|new balance)\s*(?:حسابك)?\s*(?:الحالي|المتوفر|المتاح|المتبقي|الفعلي|الجديد|الآن|الان|طرفنا|هو|is|:|=)*[\s:]*(?:' +
+            currencyPattern +
+            r')?[\s:]*([0-9,]+(?:\.[0-9]+)?)',
         caseSensitive: false,
       ),
       // 2. Intervening clause: "available balance for account ending in 9876 is USD 3,500.00"
       RegExp(
-        r'(?:الرصيد|رصيدك|رصيد|balance|avail bal|available balance)[\s\S]*?(?:هو|is|:|=)[\s:]*(?:' + currencyPattern + r')?[\s:]*([0-9,]+(?:\.[0-9]+)?)',
+        r'(?:الرصيد|رصيدك|رصيد|balance|avail bal|available balance)[\s\S]*?(?:هو|is|:|=)[\s:]*(?:' +
+            currencyPattern +
+            r')?[\s:]*([0-9,]+(?:\.[0-9]+)?)',
         caseSensitive: false,
         dotAll: true,
       ),
       // 3. Suffix balance: "4,045.30 YER رصيدك", "$1,250 Avail Bal" (must NOT be preceded by بمبلغ/بقيمة/amount)
       RegExp(
-        r'(?<!(?:ب?مبلغ|ب?قيمة|amount)\s*)([0-9,]+(?:\.[0-9]+)?)\s*(?:' + currencyPattern + r')+\s*(?:الرصيد|رصيدك|رصيد|balance|bal)\b',
+        r'(?<!(?:ب?مبلغ|ب?قيمة|amount)\s*)([0-9,]+(?:\.[0-9]+)?)\s*(?:' +
+            currencyPattern +
+            r')+\s*(?:الرصيد|رصيدك|رصيد|balance|bal)\b',
         caseSensitive: false,
       ),
     ];
@@ -222,7 +378,9 @@ class SmartSmsParser {
       ),
       // Tier 2: Inward transfer pattern (amount before destination clause: تم تحويل 8000 إلى محفظتك)
       RegExp(
-        r'(?:تم\s+)?(?:تحويل|توريد|إيداع|ايداع|أودع|اودع|قيد)\s+(?:مبلغ\s+)?([0-9,]+(?:\.[0-9]+)?)\s*(?:' + currencyPattern + r')?\s*(?:إلى|الى|في|لحساب|لك)',
+        r'(?:تم\s+)?(?:تحويل|توريد|إيداع|ايداع|أودع|اودع|قيد)\s+(?:مبلغ\s+)?([0-9,]+(?:\.[0-9]+)?)\s*(?:' +
+            currencyPattern +
+            r')?\s*(?:إلى|الى|في|لحساب|لك)',
         caseSensitive: false,
       ),
       // Tier 3: Keyword followed directly by currency and amount (excluding 9-digit phone numbers)
@@ -262,7 +420,8 @@ class SmartSmsParser {
       }
     }
 
-    final hasInwardTarget = text.contains('لحسابك') ||
+    final hasInwardTarget =
+        text.contains('لحسابك') ||
         text.contains('لحسابكم') ||
         text.contains('إلى حسابك') ||
         text.contains('الى حسابك') ||
@@ -273,7 +432,11 @@ class SmartSmsParser {
         text.contains('لك');
 
     final activeExpenseKeywords = expenseKeywords.where((kw) {
-      if ((kw == 'تحويل' || kw == 'تم تحويل' || kw == 'transferred' || kw == 'transfer to') && hasInwardTarget) {
+      if ((kw == 'تحويل' ||
+              kw == 'تم تحويل' ||
+              kw == 'transferred' ||
+              kw == 'transfer to') &&
+          hasInwardTarget) {
         return false;
       }
       return true;
@@ -390,8 +553,5 @@ class _OperationResult {
   final double amount;
   final String type;
 
-  _OperationResult({
-    required this.amount,
-    required this.type,
-  });
+  _OperationResult({required this.amount, required this.type});
 }

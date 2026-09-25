@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:mizaan/core/constants/app_constants.dart';
 import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
+import 'package:mizaan/data/repositories/wallet_repository.dart';
 import 'package:mizaan/features/sms/cubit/sms_cubit.dart';
 import 'package:mizaan/features/sms/cubit/sms_state.dart';
 import 'package:mizaan/features/transactions/cubit/transactions_cubit.dart';
@@ -17,18 +19,49 @@ class SmsSyncScreen extends StatefulWidget {
   State<SmsSyncScreen> createState() => _SmsSyncScreenState();
 }
 
-class _SmsSyncScreenState extends State<SmsSyncScreen> {
+class _SmsSyncScreenState extends State<SmsSyncScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startScan();
     });
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        context.read<SmsCubit>().state is SmsPermissionRequired) {
+      Permission.sms.isGranted.then((granted) {
+        if (granted && mounted) _startScan();
+      });
+    }
+  }
+
+  Future<void> _requestPermissionOrOpenSettings() async {
+    if (await Permission.sms.isPermanentlyDenied) {
+      await openAppSettings();
+      return;
+    }
+    _startScan();
+  }
+
   void _startScan() {
     final walletsState = context.read<WalletsCubit>().state;
-    final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+    var wallets = walletsState is WalletsLoaded
+        ? walletsState.wallets
+        : <Wallet>[];
+    if (wallets.isEmpty) {
+      wallets = WalletRepository().getWallets();
+    }
     context.read<SmsCubit>().scanSms(wallets: wallets);
   }
 
@@ -54,7 +87,9 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
               SnackBar(
                 backgroundColor: AppTheme.primaryColor,
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 content: Row(
                   children: [
                     const Icon(Icons.check_circle_rounded, color: Colors.white),
@@ -80,6 +115,10 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
             return _buildPermissionRequest();
           }
 
+          if (state is SmsError) {
+            return _buildErrorState(state.message);
+          }
+
           if (state is SmsScanning || state is SmsImporting) {
             return Center(
               child: Column(
@@ -91,7 +130,10 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                     state is SmsImporting
                         ? 'جاري حفظ الحركات في المحافظ...'
                         : 'جاري فحص رسائل المحافظ في صندوق الوارد...',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -141,7 +183,11 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
               Text(
                 'يتعرف ميزان تلقائياً على رسائل البنوك والمحافظ اليمنية (الكريمي، جيب، كاش، محفظتي، جوالي) لتسجيل مصاريفك وإيداعاتك بضغطة واحدة.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.5),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
               ),
               const SizedBox(height: 20),
               Container(
@@ -153,7 +199,10 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.lock_outline_rounded, color: Colors.blue.shade800),
+                    Icon(
+                      Icons.lock_outline_rounded,
+                      color: Colors.blue.shade800,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -177,15 +226,71 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   icon: const Icon(Icons.check_circle_outline_rounded),
                   label: const Text(
                     'منح الإذن وبدء الفحص',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  onPressed: _startScan,
+                  onPressed: _requestPermissionOrOpenSettings,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: ResponsiveConstraint(
+          maxWidth: 520,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.sync_problem_rounded,
+                  size: 58,
+                  color: Colors.red.shade700,
+                ),
+              ),
+              const SizedBox(height: 22),
+              const Text(
+                'تعذر إكمال مزامنة الرسائل',
+                style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, height: 1.5),
+              ),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _startScan,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('إعادة المحاولة'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: openAppSettings,
+                icon: const Icon(Icons.settings_rounded),
+                label: const Text('فتح إعدادات صلاحيات التطبيق'),
               ),
             ],
           ),
@@ -209,7 +314,11 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                   color: Colors.green.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.mark_email_read_rounded, size: 64, color: Colors.green.shade700),
+                child: Icon(
+                  Icons.mark_email_read_rounded,
+                  size: 64,
+                  color: Colors.green.shade700,
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -227,8 +336,13 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.primaryColor,
                   side: const BorderSide(color: AppTheme.primaryColor),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('إعادة الفحص'),
@@ -243,7 +357,12 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
 
   Widget _buildCandidatesList(SmsLoaded state) {
     final walletsState = context.watch<WalletsCubit>().state;
-    final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+    var wallets = walletsState is WalletsLoaded
+        ? walletsState.wallets
+        : <Wallet>[];
+    if (wallets.isEmpty) {
+      wallets = WalletRepository().getWallets();
+    }
     final allSelected = state.items.every((i) => i.isSelected);
 
     return ResponsiveConstraint(
@@ -253,7 +372,10 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
         children: [
           // Top action bar: Select All + Count
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 10.0,
+            ),
             color: Theme.of(context).cardColor,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -264,15 +386,21 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                 ),
                 TextButton.icon(
                   icon: Icon(
-                    allSelected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                    allSelected
+                        ? Icons.check_box_rounded
+                        : Icons.check_box_outline_blank_rounded,
                     size: 20,
                     color: AppTheme.primaryColor,
                   ),
                   label: Text(
                     allSelected ? 'إلغاء تحديد الكل' : 'تحديد الكل',
-                    style: const TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: AppTheme.primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  onPressed: () => context.read<SmsCubit>().toggleSelectAll(!allSelected),
+                  onPressed: () =>
+                      context.read<SmsCubit>().toggleSelectAll(!allSelected),
                 ),
               ],
             ),
@@ -283,7 +411,10 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
           if (wallets.isEmpty)
             Container(
               margin: const EdgeInsets.all(12.0),
-              padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14.0,
+                vertical: 10.0,
+              ),
               decoration: BoxDecoration(
                 color: Colors.amber.shade50,
                 borderRadius: BorderRadius.circular(14),
@@ -296,12 +427,20 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                   const Expanded(
                     child: Text(
                       'يجب إضافة محفظة واحدة على الأقل لربط الحركات بها.',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                   TextButton(
-                    onPressed: () => Navigator.pushNamed(context, AppRoutes.addWallet),
-                    child: const Text('إضافة محفظة', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () =>
+                        Navigator.pushNamed(context, AppRoutes.addWallet),
+                    child: const Text(
+                      'إضافة محفظة',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),
@@ -346,8 +485,11 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                               visualDensity: VisualDensity.compact,
                               value: item.isSelected,
                               activeColor: AppTheme.primaryColor,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-                              onChanged: (_) => context.read<SmsCubit>().toggleSelect(index),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              onChanged: (_) =>
+                                  context.read<SmsCubit>().toggleSelect(index),
                             ),
                             const SizedBox(width: 4),
                             Expanded(
@@ -357,23 +499,34 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: item.data.isBalanceOnly
                                           ? Colors.blue.withValues(alpha: 0.12)
                                           : (isExpense
-                                              ? Colors.red.withValues(alpha: 0.12)
-                                              : Colors.green.withValues(alpha: 0.12)),
+                                                ? Colors.red.withValues(
+                                                    alpha: 0.12,
+                                                  )
+                                                : Colors.green.withValues(
+                                                    alpha: 0.12,
+                                                  )),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
                                       item.data.isBalanceOnly
                                           ? 'تحديث رصيد (تسوية)'
-                                          : (isExpense ? 'خصم / سداد' : 'إيداع / استلام'),
+                                          : (isExpense
+                                                ? 'خصم / سداد'
+                                                : 'إيداع / استلام'),
                                       style: TextStyle(
                                         color: item.data.isBalanceOnly
                                             ? Colors.blue.shade800
-                                            : (isExpense ? Colors.red.shade800 : Colors.green.shade800),
+                                            : (isExpense
+                                                  ? Colors.red.shade800
+                                                  : Colors.green.shade800),
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12,
                                       ),
@@ -385,7 +538,8 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                                       style: const TextStyle(fontSize: 11),
                                     ),
                                     visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                     padding: EdgeInsets.zero,
                                   ),
                                 ],
@@ -399,21 +553,31 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                                   fit: BoxFit.scaleDown,
                                   child: Text(
                                     item.data.isBalanceOnly
-                                        ? AppConstants.formatCurrency(item.data.balance ?? 0.0)
-                                        : AppConstants.formatCurrency(item.data.amount),
+                                        ? AppConstants.formatCurrency(
+                                            item.data.balance ?? 0.0,
+                                          )
+                                        : AppConstants.formatCurrency(
+                                            item.data.amount,
+                                          ),
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color: item.data.isBalanceOnly
                                           ? AppTheme.primaryColor
-                                          : (isExpense ? Colors.red.shade700 : Colors.green.shade700),
+                                          : (isExpense
+                                                ? Colors.red.shade700
+                                                : Colors.green.shade700),
                                     ),
                                   ),
                                 ),
-                                if (!item.data.isBalanceOnly && item.data.balance != null)
+                                if (!item.data.isBalanceOnly &&
+                                    item.data.balance != null)
                                   Text(
                                     'الرصيد: ${AppConstants.formatCurrency(item.data.balance!)}',
-                                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade600,
+                                    ),
                                   ),
                               ],
                             ),
@@ -423,17 +587,29 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
 
                         // Assigned Wallet Picker
                         Padding(
-                          padding: const EdgeInsets.only(right: 48.0, left: 8.0),
+                          padding: const EdgeInsets.only(
+                            right: 48.0,
+                            left: 8.0,
+                          ),
                           child: Row(
                             children: [
-                              const Text('المحفظة:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              const Text(
+                                'المحفظة:',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: DropdownButton<String>(
                                   isExpanded: true,
                                   value: item.targetWalletId,
                                   underline: const SizedBox.shrink(),
-                                  hint: const Text('اختر المحفظة', style: TextStyle(fontSize: 13)),
+                                  hint: const Text(
+                                    'اختر المحفظة',
+                                    style: TextStyle(fontSize: 13),
+                                  ),
                                   items: wallets.map((w) {
                                     return DropdownMenuItem<String>(
                                       value: w.id,
@@ -441,22 +617,34 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                                         children: [
                                           CircleAvatar(
                                             radius: 10,
-                                            backgroundColor: Color(w.colorValue),
+                                            backgroundColor: Color(
+                                              w.colorValue,
+                                            ),
                                             child: Icon(
-                                              AppConstants.getWalletIcon(w.iconCodePoint),
+                                              AppConstants.getWalletIcon(
+                                                w.iconCodePoint,
+                                              ),
                                               size: 11,
                                               color: Colors.white,
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          Text(w.name, style: const TextStyle(fontSize: 13)),
+                                          Text(
+                                            w.name,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     );
                                   }).toList(),
                                   onChanged: (val) {
                                     if (val != null) {
-                                      context.read<SmsCubit>().setTargetWallet(index, val);
+                                      context.read<SmsCubit>().setTargetWallet(
+                                        index,
+                                        val,
+                                      );
                                     }
                                   },
                                 ),
@@ -467,13 +655,20 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
 
                         // Date & sender
                         Padding(
-                          padding: const EdgeInsets.only(right: 48.0, left: 8.0, top: 4.0),
+                          padding: const EdgeInsets.only(
+                            right: 48.0,
+                            left: 8.0,
+                            top: 4.0,
+                          ),
                           child: Row(
                             children: [
                               Expanded(
                                 child: Text(
                                   '${AppConstants.formatDate(item.data.date)}  ${AppConstants.formatTime(item.data.date)}  •  ${item.data.rawSender}',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -512,14 +707,19 @@ class _SmsSyncScreenState extends State<SmsSyncScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   icon: const Icon(Icons.download_done_rounded),
                   label: Text(
                     wallets.isEmpty
                         ? 'يرجى إضافة محفظة أولاً'
                         : 'استيراد الحركات المحددة (${state.selectedCount}) 📥',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   onPressed: (state.selectedCount == 0 || wallets.isEmpty)
                       ? null

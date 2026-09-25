@@ -29,14 +29,16 @@ class TransactionsHistoryScreen extends StatefulWidget {
   });
 
   @override
-  State<TransactionsHistoryScreen> createState() => _TransactionsHistoryScreenState();
+  State<TransactionsHistoryScreen> createState() =>
+      _TransactionsHistoryScreenState();
 }
 
 class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   String _searchQuery = '';
-  String _selectedTypeFilter = 'all'; // 'all' | 'expense' | 'income' | 'adjustment'
+  String _selectedTypeFilter =
+      'all'; // 'all' | 'expense' | 'income' | 'adjustment'
   String _selectedSourceFilter = 'all'; // 'all' | 'sms' | 'manual'
   String? _selectedWalletId;
   String _selectedDateRange = 'all'; // 'all' | 'today' | 'week' | 'month'
@@ -57,14 +59,17 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
     if (Platform.isAndroid && context.mounted) {
       final prefs = await SharedPreferences.getInstance();
       final uid = DatabaseService.currentUserId ?? 'guest';
-      final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
+      final autoImportEnabled =
+          prefs.getBool('${uid}_smsAutoImportEnabled') ??
           prefs.getBool('smsAutoImportEnabled') ??
           true;
 
       if (autoImportEnabled) {
         if (!context.mounted) return;
         final walletsState = context.read<WalletsCubit>().state;
-        final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+        final wallets = walletsState is WalletsLoaded
+            ? walletsState.wallets
+            : <Wallet>[];
         final flushed = await SmsService.flushPendingBackgroundSms(
           transactionRepository: TransactionRepository(),
           walletRepository: WalletRepository(),
@@ -72,7 +77,9 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
         );
         int imported = 0;
         if (wallets.isNotEmpty && context.mounted) {
-          imported = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+          imported = await context.read<SmsCubit>().autoImportSilently(
+            wallets: wallets,
+          );
         }
         final total = flushed + imported;
         if (total > 0 && context.mounted) {
@@ -80,7 +87,9 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
             SnackBar(
               backgroundColor: AppTheme.primaryColor,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               content: Text('تم استيراد $total حركات جديدة بنجاح 📩'),
             ),
           );
@@ -112,7 +121,8 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
       }
 
       // 3. Source Filter
-      if (_selectedSourceFilter != 'all' && tx.source != _selectedSourceFilter) {
+      if (_selectedSourceFilter != 'all' &&
+          tx.source != _selectedSourceFilter) {
         return false;
       }
 
@@ -127,7 +137,11 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
         final start = DateTime(now.year, now.month, now.day);
         if (tx.date.isBefore(start)) return false;
       } else if (_selectedDateRange == 'week') {
-        final start = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 7));
+        final start = DateTime(
+          now.year,
+          now.month,
+          now.day,
+        ).subtract(const Duration(days: 7));
         if (tx.date.isBefore(start)) return false;
       } else if (_selectedDateRange == 'month') {
         final start = DateTime(now.year, now.month, 1);
@@ -138,7 +152,9 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
     }).toList();
   }
 
-  Map<String, List<TransactionModel>> _groupTransactionsByDate(List<TransactionModel> list) {
+  Map<String, List<TransactionModel>> _groupTransactionsByDate(
+    List<TransactionModel> list,
+  ) {
     final Map<String, List<TransactionModel>> grouped = {};
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -164,12 +180,15 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
   Widget build(BuildContext context) {
     final body = BlocBuilder<TransactionsCubit, TransactionsState>(
       builder: (context, txState) {
-        final allTransactions =
-            txState is TransactionsLoaded ? txState.transactions : <TransactionModel>[];
+        final allTransactions = txState is TransactionsLoaded
+            ? txState.transactions
+            : <TransactionModel>[];
 
         return BlocBuilder<WalletsCubit, WalletsState>(
           builder: (context, walletsState) {
-            final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+            final wallets = walletsState is WalletsLoaded
+                ? walletsState.wallets
+                : <Wallet>[];
             final filtered = _filterTransactions(allTransactions);
 
             // Compute summary metrics for filtered list
@@ -191,29 +210,36 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
                   // Top Search & Filter Bar
                   _buildSearchAndFiltersHeader(wallets),
 
-                // Metrics Summary Strip for the filtered results
-                if (filtered.isNotEmpty) _buildSummaryStrip(filtered.length, totalIncome, totalExpense),
+                  // Metrics Summary Strip for the filtered results
+                  if (filtered.isNotEmpty)
+                    _buildSummaryStrip(
+                      filtered.length,
+                      totalIncome,
+                      totalExpense,
+                    ),
 
-                // Transaction Groups List
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () => _handleRefresh(context),
-                    child: filtered.isEmpty
-                        ? SingleChildScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            child: SizedBox(
-                              height: 400,
-                              child: _buildEmptyState(allTransactions.isEmpty),
-                            ),
-                          )
-                        : _buildGroupedList(filtered, wallets),
+                  // Transaction Groups List
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: () => _handleRefresh(context),
+                      child: filtered.isEmpty
+                          ? SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              child: SizedBox(
+                                height: 400,
+                                child: _buildEmptyState(
+                                  allTransactions.isEmpty,
+                                ),
+                              ),
+                            )
+                          : _buildGroupedList(filtered, wallets),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
+                ],
+              ),
+            );
+          },
+        );
       },
     );
 
@@ -254,7 +280,10 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
             onChanged: (val) => setState(() => _searchQuery = val.trim()),
             decoration: InputDecoration(
               hintText: 'ابحث في الفئات، الملاحظات، أو المبالغ...',
-              prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.primaryColor),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                color: AppTheme.primaryColor,
+              ),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear_rounded),
@@ -264,14 +293,21 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
                       },
                     )
                   : null,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 0,
+                horizontal: 16,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
+                borderSide: BorderSide(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
+                borderSide: BorderSide(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                ),
               ),
               filled: true,
               fillColor: Theme.of(context).scaffoldBackgroundColor,
@@ -294,20 +330,24 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
                 _buildFilterChip(
                   label: 'مصروفات 🔴',
                   isSelected: _selectedTypeFilter == 'expense',
-                  onSelected: () => setState(() => _selectedTypeFilter = 'expense'),
+                  onSelected: () =>
+                      setState(() => _selectedTypeFilter = 'expense'),
                 ),
                 const SizedBox(width: 6),
                 _buildFilterChip(
                   label: 'إيرادات 🟢',
                   isSelected: _selectedTypeFilter == 'income',
-                  onSelected: () => setState(() => _selectedTypeFilter = 'income'),
+                  onSelected: () =>
+                      setState(() => _selectedTypeFilter = 'income'),
                 ),
                 const SizedBox(width: 6),
                 _buildFilterChip(
                   label: 'رسائل SMS 📩',
                   isSelected: _selectedSourceFilter == 'sms',
                   onSelected: () => setState(() {
-                    _selectedSourceFilter = _selectedSourceFilter == 'sms' ? 'all' : 'sms';
+                    _selectedSourceFilter = _selectedSourceFilter == 'sms'
+                        ? 'all'
+                        : 'sms';
                   }),
                 ),
                 const SizedBox(width: 6),
@@ -316,7 +356,11 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
                 DropdownButton<String>(
                   value: _selectedDateRange,
                   underline: const SizedBox(),
-                  icon: const Icon(Icons.calendar_month_rounded, size: 18, color: AppTheme.primaryColor),
+                  icon: const Icon(
+                    Icons.calendar_month_rounded,
+                    size: 18,
+                    color: AppTheme.primaryColor,
+                  ),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -339,20 +383,24 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
                   DropdownButton<String?>(
                     value: _selectedWalletId,
                     underline: const SizedBox(),
-                    icon: const Icon(Icons.account_balance_wallet_rounded,
-                        size: 18, color: AppTheme.primaryColor),
+                    icon: const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      size: 18,
+                      color: AppTheme.primaryColor,
+                    ),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('كل المحافظ')),
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('كل المحافظ'),
+                      ),
                       ...wallets.map(
-                        (w) => DropdownMenuItem(
-                          value: w.id,
-                          child: Text(w.name),
-                        ),
+                        (w) =>
+                            DropdownMenuItem(value: w.id, child: Text(w.name)),
                       ),
                     ],
                     onChanged: (val) => setState(() => _selectedWalletId = val),
@@ -397,7 +445,11 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
         children: [
           Text(
             '$count حركة مطابقة',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
           ),
           Row(
             children: [
@@ -428,7 +480,10 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
     );
   }
 
-  Widget _buildGroupedList(List<TransactionModel> filtered, List<Wallet> wallets) {
+  Widget _buildGroupedList(
+    List<TransactionModel> filtered,
+    List<Wallet> wallets,
+  ) {
     final grouped = _groupTransactionsByDate(filtered);
 
     return ListView.builder(
@@ -470,9 +525,9 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
             // Transactions for this day
             ...txList.map((tx) {
               final wallet = wallets.cast<Wallet?>().firstWhere(
-                    (w) => w?.id == tx.walletId,
-                    orElse: () => null,
-                  );
+                (w) => w?.id == tx.walletId,
+                orElse: () => null,
+              );
 
               final isIncome = tx.type == 'income';
               final isAdjustment = tx.type == 'adjustment';
@@ -480,17 +535,22 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
               final Color amountColor = isIncome
                   ? AppTheme.primaryColor
                   : isAdjustment
-                      ? Colors.blue.shade700
-                      : Colors.red.shade700;
+                  ? Colors.blue.shade700
+                  : Colors.red.shade700;
               final String prefix = isIncome
                   ? '+'
                   : isAdjustment
-                      ? (tx.amount >= 0 ? '+' : '')
-                      : '-';
+                  ? (tx.amount >= 0 ? '+' : '')
+                  : '-';
 
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 4.0,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: ListTile(
                   onTap: () => TransactionDetailSheet.show(context, tx),
                   leading: CircleAvatar(
@@ -510,7 +570,10 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
                       if (tx.source == 'sms') ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(6),
@@ -566,13 +629,17 @@ class _TransactionsHistoryScreenState extends State<TransactionsHistoryScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              noDataAtAll ? Icons.receipt_long_outlined : Icons.search_off_rounded,
+              noDataAtAll
+                  ? Icons.receipt_long_outlined
+                  : Icons.search_off_rounded,
               size: 64,
               color: Colors.grey.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             Text(
-              noDataAtAll ? 'لا توجد حركات مسجلة بعد' : 'لا توجد نتائج تطابق خيارات البحث أو التصفية',
+              noDataAtAll
+                  ? 'لا توجد حركات مسجلة بعد'
+                  : 'لا توجد نتائج تطابق خيارات البحث أو التصفية',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),

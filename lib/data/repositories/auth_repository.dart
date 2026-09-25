@@ -89,6 +89,11 @@ class AuthRepository {
         return 'تم تعطيل هذا الحساب، تواصل مع الدعم';
       case 'too-many-requests':
         return 'محاولات كثيرة خاطئة، يرجى الانتظار قليلاً ثم المحاولة';
+      case 'invalid-recipient-email':
+        return 'تعذر إرسال الرابط لأن عنوان البريد غير صالح';
+      case 'unauthorized-continue-uri':
+      case 'invalid-continue-uri':
+        return 'إعداد رابط استعادة كلمة المرور غير صحيح في Firebase';
       case 'network-request-failed':
         return 'تعذر الاتصال بالشبكة، يرجى التأكد من اتصال الإنترنت';
       case 'operation-not-allowed':

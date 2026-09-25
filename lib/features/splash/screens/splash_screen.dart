@@ -18,7 +18,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   // Coin 1 animations
@@ -73,24 +74,27 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     // Coins slide toward center to merge (0.28 -> 0.52)
-    _coin1Slide = Tween<Offset>(begin: const Offset(-75, -40), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.28, 0.52, curve: Curves.easeInOutCubic),
-      ),
-    );
-    _coin2Slide = Tween<Offset>(begin: const Offset(75, -40), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.28, 0.52, curve: Curves.easeInOutCubic),
-      ),
-    );
-    _coin3Slide = Tween<Offset>(begin: const Offset(0, 65), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.28, 0.52, curve: Curves.easeInOutCubic),
-      ),
-    );
+    _coin1Slide = Tween<Offset>(begin: const Offset(-75, -40), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.28, 0.52, curve: Curves.easeInOutCubic),
+          ),
+        );
+    _coin2Slide = Tween<Offset>(begin: const Offset(75, -40), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.28, 0.52, curve: Curves.easeInOutCubic),
+          ),
+        );
+    _coin3Slide = Tween<Offset>(begin: const Offset(0, 65), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.28, 0.52, curve: Curves.easeInOutCubic),
+          ),
+        );
 
     // Coins disappear as they merge (0.48 -> 0.56)
     _coinsMergeOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
@@ -115,12 +119,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         curve: const Interval(0.68, 0.95, curve: Curves.easeIn),
       ),
     );
-    _textSlide = Tween<Offset>(begin: const Offset(0, 0.25), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.68, 0.95, curve: Curves.easeOutCubic),
-      ),
-    );
+    _textSlide = Tween<Offset>(begin: const Offset(0, 0.25), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.68, 0.95, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
@@ -211,140 +216,141 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
+      backgroundColor: isDark
+          ? AppTheme.darkBackground
+          : AppTheme.lightBackground,
       body: Center(
         child: SingleChildScrollView(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Coin merge into wallet stage
-            SizedBox(
-              width: 140,
-              height: 140,
-              child: Stack(
-                alignment: Alignment.center,
-                clipBehavior: Clip.none,
-                children: [
-                  // Animated Coins merging in
-                  AnimatedBuilder(
-                    animation: _controller,
-                    builder: (context, _) {
-                      final opacity = _coinsMergeOpacity.value;
-                      if (opacity <= 0.0) return const SizedBox.shrink();
+              SizedBox(
+                width: 140,
+                height: 140,
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Animated Coins merging in
+                    AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, _) {
+                        final opacity = _coinsMergeOpacity.value;
+                        if (opacity <= 0.0) return const SizedBox.shrink();
 
-                      return Opacity(
-                        opacity: opacity,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none,
-                          children: [
-                            // Coin 1
-                            Transform.translate(
-                              offset: _coin1Slide.value,
-                              child: Transform.scale(
-                                scale: _coin1Scale.value,
-                                child: _buildCoinWidget(label: '﷼'),
+                        return Opacity(
+                          opacity: opacity,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            clipBehavior: Clip.none,
+                            children: [
+                              // Coin 1
+                              Transform.translate(
+                                offset: _coin1Slide.value,
+                                child: Transform.scale(
+                                  scale: _coin1Scale.value,
+                                  child: _buildCoinWidget(label: '﷼'),
+                                ),
                               ),
-                            ),
-                            // Coin 2
-                            Transform.translate(
-                              offset: _coin2Slide.value,
-                              child: Transform.scale(
-                                scale: _coin2Scale.value,
-                                child: _buildCoinWidget(label: '﷼'),
+                              // Coin 2
+                              Transform.translate(
+                                offset: _coin2Slide.value,
+                                child: Transform.scale(
+                                  scale: _coin2Scale.value,
+                                  child: _buildCoinWidget(label: '﷼'),
+                                ),
                               ),
-                            ),
-                            // Coin 3
-                            Transform.translate(
-                              offset: _coin3Slide.value,
-                              child: Transform.scale(
-                                scale: _coin3Scale.value,
-                                child: _buildCoinWidget(label: '﷼'),
+                              // Coin 3
+                              Transform.translate(
+                                offset: _coin3Slide.value,
+                                child: Transform.scale(
+                                  scale: _coin3Scale.value,
+                                  child: _buildCoinWidget(label: '﷼'),
+                                ),
                               ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+
+                    // Wallet icon pops with elastic curve
+                    AnimatedBuilder(
+                      animation: _walletScale,
+                      builder: (context, child) {
+                        final scale = _walletScale.value;
+                        if (scale <= 0.01) return const SizedBox.shrink();
+
+                        return Transform.scale(scale: scale, child: child);
+                      },
+                      child: Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.35,
+                              ),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
                             ),
                           ],
-                        ),
-                      );
-                    },
-                  ),
-
-                  // Wallet icon pops with elastic curve
-                  AnimatedBuilder(
-                    animation: _walletScale,
-                    builder: (context, child) {
-                      final scale = _walletScale.value;
-                      if (scale <= 0.01) return const SizedBox.shrink();
-
-                      return Transform.scale(
-                        scale: scale,
-                        child: child,
-                      );
-                    },
-                    child: Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.35),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
+                          border: Border.all(
+                            color: AppTheme.accentColor.withValues(alpha: 0.6),
+                            width: 2.5,
                           ),
-                        ],
-                        border: Border.all(
-                          color: AppTheme.accentColor.withValues(alpha: 0.6),
-                          width: 2.5,
                         ),
-                      ),
-                      child: const Icon(
-                        Icons.account_balance_wallet_rounded,
-                        size: 48,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // App Name & Slogan
-            SlideTransition(
-              position: _textSlide,
-              child: FadeTransition(
-                opacity: _textOpacity,
-                child: Column(
-                  children: [
-                    const Text(
-                      'ميزان',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 34,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'مجمع المحافظ وتتبع المصاريف',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white70 : Colors.black54,
+                        child: const Icon(
+                          Icons.account_balance_wallet_rounded,
+                          size: 48,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 28),
+
+              // App Name & Slogan
+              SlideTransition(
+                position: _textSlide,
+                child: FadeTransition(
+                  opacity: _textOpacity,
+                  child: Column(
+                    children: [
+                      const Text(
+                        'ميزان',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 34,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryColor,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'مجمع المحافظ وتتبع المصاريف',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

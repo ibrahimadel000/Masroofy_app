@@ -30,9 +30,13 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String smsSync = '/sms-sync';
 
-  static Route<dynamic>? onGenerateRoute(RouteSettings routeSettings, SharedPreferences prefs) {
+  static Route<dynamic>? onGenerateRoute(
+    RouteSettings routeSettings,
+    SharedPreferences prefs,
+  ) {
     // Dynamic route: /wallet/:id
-    if (routeSettings.name != null && routeSettings.name!.startsWith('/wallet/')) {
+    if (routeSettings.name != null &&
+        routeSettings.name!.startsWith('/wallet/')) {
       final walletId = routeSettings.name!.replaceFirst('/wallet/', '');
       return MaterialPageRoute(
         builder: (_) => WalletDetailsScreen(walletId: walletId),
@@ -57,7 +61,9 @@ class AppRoutes {
           settings: routeSettings,
         );
       case register:
-        final fromLogin = routeSettings.arguments is bool ? routeSettings.arguments as bool : false;
+        final fromLogin = routeSettings.arguments is bool
+            ? routeSettings.arguments as bool
+            : false;
         return MaterialPageRoute(
           builder: (_) => RegisterScreen(fromLogin: fromLogin),
           settings: routeSettings,
@@ -80,13 +86,17 @@ class AppRoutes {
       case addTransaction:
         final initialWalletId = routeSettings.arguments as String?;
         return MaterialPageRoute(
-          builder: (_) => AddTransactionScreen(initialWalletId: initialWalletId),
+          builder: (_) =>
+              AddTransactionScreen(initialWalletId: initialWalletId),
           settings: routeSettings,
         );
       case transactions:
         final initialWalletId = routeSettings.arguments as String?;
         return MaterialPageRoute(
-          builder: (_) => TransactionsHistoryScreen(isEmbedded: false, initialWalletId: initialWalletId),
+          builder: (_) => TransactionsHistoryScreen(
+            isEmbedded: false,
+            initialWalletId: initialWalletId,
+          ),
           settings: routeSettings,
         );
       case favorites:

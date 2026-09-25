@@ -40,13 +40,15 @@ class _StatsScreenState extends State<StatsScreen> {
   void _refreshStats({DateTime? targetMonth}) {
     final txState = context.read<TransactionsCubit>().state;
     final wState = context.read<WalletsCubit>().state;
-    final transactions = txState is TransactionsLoaded ? txState.transactions : <TransactionModel>[];
+    final transactions = txState is TransactionsLoaded
+        ? txState.transactions
+        : <TransactionModel>[];
     final wallets = wState is WalletsLoaded ? wState.wallets : <Wallet>[];
     context.read<StatsCubit>().updateData(
-          transactions: transactions,
-          wallets: wallets,
-          referenceDate: targetMonth,
-        );
+      transactions: transactions,
+      wallets: wallets,
+      referenceDate: targetMonth,
+    );
   }
 
   Color _getCategoryColor(String category) {
@@ -106,7 +108,9 @@ class _StatsScreenState extends State<StatsScreen> {
     return BlocBuilder<StatsCubit, StatsState>(
       builder: (context, state) {
         if (state is StatsLoading) {
-          return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+          return const Center(
+            child: CircularProgressIndicator(color: AppTheme.primaryColor),
+          );
         }
 
         if (state is StatsError) {
@@ -116,11 +120,18 @@ class _StatsScreenState extends State<StatsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline_rounded, size: 48, color: Colors.red),
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    size: 48,
+                    color: Colors.red,
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     state.message,
-                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -135,7 +146,9 @@ class _StatsScreenState extends State<StatsScreen> {
         }
 
         if (state is! StatsLoaded) {
-          return const Center(child: CircularProgressIndicator(color: AppTheme.primaryColor));
+          return const Center(
+            child: CircularProgressIndicator(color: AppTheme.primaryColor),
+          );
         }
 
         final result = state.result;
@@ -146,69 +159,78 @@ class _StatsScreenState extends State<StatsScreen> {
         }
 
         return RefreshIndicator(
-          onRefresh: () async => _refreshStats(targetMonth: state.selectedMonth),
+          onRefresh: () async =>
+              _refreshStats(targetMonth: state.selectedMonth),
           child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: ClampingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 12.0,
+            ),
             child: ResponsiveConstraint(
               maxWidth: 1100,
               alignment: Alignment.topCenter,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                // 1. Month Navigation Header
-                _buildMonthHeader(state.selectedMonth),
-                const SizedBox(height: 14),
+                  // 1. Month Navigation Header
+                  _buildMonthHeader(state.selectedMonth),
+                  const SizedBox(height: 14),
 
-                // 2. Wallet Filter Chips Bar
-                _buildWalletFilterBar(state),
-                const SizedBox(height: 16),
-
-                // If this specific month has no transactions, show monthly empty state
-                if (result.monthlyTransactionCount == 0) ...[
-                  _buildMonthEmptyState(state.selectedMonth),
-                ] else ...[
-                  // 3. Financial Overview Cards (Income, Expense, Net, Daily)
-                  _buildFinancialOverviewGrid(result),
+                  // 2. Wallet Filter Chips Bar
+                  _buildWalletFilterBar(state),
                   const SizedBox(height: 16),
 
-                  // 4. Spending vs Income Progress Bar
-                  if (result.totalMonthlyIncome > 0 || result.totalMonthlyExpense > 0) ...[
-                    _buildIncomeExpenseRatioCard(result),
+                  // If this specific month has no transactions, show monthly empty state
+                  if (result.monthlyTransactionCount == 0) ...[
+                    _buildMonthEmptyState(state.selectedMonth),
+                  ] else ...[
+                    // 3. Financial Overview Cards (Income, Expense, Net, Daily)
+                    _buildFinancialOverviewGrid(result),
                     const SizedBox(height: 16),
-                  ],
 
-                  // 5. Rule-based Smart Insights
-                  _buildInsightCards(result),
-                  const SizedBox(height: 16),
+                    // 4. Spending vs Income Progress Bar
+                    if (result.totalMonthlyIncome > 0 ||
+                        result.totalMonthlyExpense > 0) ...[
+                      _buildIncomeExpenseRatioCard(result),
+                      const SizedBox(height: 16),
+                    ],
 
-                  // 6. Category Breakdown & Pie Section
-                  _buildCategoryBreakdownSection(state, result),
-                  const SizedBox(height: 16),
-
-                  // 7. Daily Spending Bar Chart (Week / Month toggle)
-                  _buildBarChartSection(state, result),
-                  const SizedBox(height: 16),
-
-                  // 8. Wallets Spending Breakdown (only when All Wallets is selected)
-                  if (state.selectedWalletId == null) ...[
-                    _buildWalletsBreakdown(context, result),
+                    // 5. Rule-based Smart Insights
+                    _buildInsightCards(result),
                     const SizedBox(height: 16),
+
+                    // 6. Category Breakdown & Pie Section
+                    _buildCategoryBreakdownSection(state, result),
+                    const SizedBox(height: 16),
+
+                    // 7. Daily Spending Bar Chart (Week / Month toggle)
+                    _buildBarChartSection(state, result),
+                    const SizedBox(height: 16),
+
+                    // 8. Wallets Spending Breakdown (only when All Wallets is selected)
+                    if (state.selectedWalletId == null) ...[
+                      _buildWalletsBreakdown(context, result),
+                      const SizedBox(height: 16),
+                    ],
                   ],
+                  const SizedBox(height: 32),
                 ],
-                const SizedBox(height: 32),
-              ],
+              ),
             ),
           ),
-        ),
-      );
+        );
       },
     );
   }
 
   Widget _buildWalletFilterBar(StatsLoaded state) {
     final walletsState = context.watch<WalletsCubit>().state;
-    final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+    final wallets = walletsState is WalletsLoaded
+        ? walletsState.wallets
+        : <Wallet>[];
 
     if (wallets.isEmpty) return const SizedBox.shrink();
 
@@ -219,16 +241,23 @@ class _StatsScreenState extends State<StatsScreen> {
         children: [
           // "كل المحافظ" Chip
           ChoiceChip(
-            label: const Text('كل المحافظ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            label: const Text(
+              'كل المحافظ',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
             avatar: const Icon(Icons.all_inclusive_rounded, size: 16),
             selected: state.selectedWalletId == null,
             selectedColor: AppTheme.primaryColor.withValues(alpha: 0.15),
             labelStyle: TextStyle(
-              color: state.selectedWalletId == null ? AppTheme.primaryColor : null,
+              color: state.selectedWalletId == null
+                  ? AppTheme.primaryColor
+                  : null,
               fontWeight: FontWeight.bold,
             ),
             side: BorderSide(
-              color: state.selectedWalletId == null ? AppTheme.primaryColor : Colors.grey.shade300,
+              color: state.selectedWalletId == null
+                  ? AppTheme.primaryColor
+                  : Colors.grey.shade300,
             ),
             onSelected: (selected) {
               if (selected) {
@@ -246,7 +275,13 @@ class _StatsScreenState extends State<StatsScreen> {
             return Padding(
               padding: const EdgeInsets.only(left: 8.0),
               child: ChoiceChip(
-                label: Text(wallet.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                label: Text(
+                  wallet.name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 avatar: Icon(
                   AppConstants.getWalletIcon(wallet.iconCodePoint),
                   size: 15,
@@ -262,7 +297,9 @@ class _StatsScreenState extends State<StatsScreen> {
                   color: isSelected ? color : Colors.grey.shade300,
                 ),
                 onSelected: (selected) {
-                  context.read<StatsCubit>().filterByWallet(selected ? wallet.id : null);
+                  context.read<StatsCubit>().filterByWallet(
+                    selected ? wallet.id : null,
+                  );
                 },
               ),
             );
@@ -275,7 +312,8 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _buildMonthEmptyState(DateTime monthDate) {
     final monthName = AppConstants.formatMonthYear(monthDate);
     final now = DateTime.now();
-    final isCurrentMonth = monthDate.year == now.year && monthDate.month == now.month;
+    final isCurrentMonth =
+        monthDate.year == now.year && monthDate.month == now.month;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -315,7 +353,11 @@ class _StatsScreenState extends State<StatsScreen> {
           Text(
             'لم يتم تسجيل أي مصاريف أو إيداعات في هذا الشهر حتى الآن.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.4),
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 13,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 20),
           Column(
@@ -327,16 +369,23 @@ class _StatsScreenState extends State<StatsScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const AddTransactionScreen(),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('➕ إضافة حركة', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: const Text(
+                    '➕ إضافة حركة',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               if (!isCurrentMonth) ...[
@@ -347,13 +396,18 @@ class _StatsScreenState extends State<StatsScreen> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.primaryColor,
                       side: const BorderSide(color: AppTheme.primaryColor),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: () {
                       context.read<StatsCubit>().changeMonth(DateTime.now());
                     },
                     icon: const Icon(Icons.today_rounded, size: 18),
-                    label: const Text('العودة للشهر الحالي', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text(
+                      'العودة للشهر الحالي',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ],
@@ -435,7 +489,11 @@ class _StatsScreenState extends State<StatsScreen> {
                 Text(
                   'لا توجد حركات مالية مسجلة بعد. عند إضافة مصاريفك أو استيراد رسائل البنوك والمحافظ، ستظهر هنا تلقائياً رسوم بيانية تفاعلية، وتحليلات أسبوعية وشهرية، واقتراحات ذكية لتوفير أموالك.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.5),
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -446,16 +504,23 @@ class _StatsScreenState extends State<StatsScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AddTransactionScreen(),
+                        ),
                       );
                     },
                     icon: const Icon(Icons.add_rounded),
-                    label: const Text('➕ تسجيل حركة مالية الآن', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text(
+                      '➕ تسجيل حركة مالية الآن',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 if (Platform.isAndroid) ...[
@@ -467,13 +532,18 @@ class _StatsScreenState extends State<StatsScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.primaryColor,
                         side: const BorderSide(color: AppTheme.primaryColor),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       onPressed: () {
                         Navigator.pushNamed(context, AppRoutes.smsSync);
                       },
                       icon: const Icon(Icons.mark_email_read_rounded),
-                      label: const Text('📩 فحص واستيراد رسائل المحافظ SMS', style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: const Text(
+                        '📩 فحص واستيراد رسائل المحافظ SMS',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ],
@@ -518,59 +588,80 @@ class _StatsScreenState extends State<StatsScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.calendar_month_rounded, color: AppTheme.primaryColor, size: 20),
+                const Icon(
+                  Icons.calendar_month_rounded,
+                  color: AppTheme.primaryColor,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
                     monthName,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),
                 if (isCurrentMonth)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'الحالي',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.bold,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
                     ),
-                  ),
-                )
-              else
-                GestureDetector(
-                  onTap: () {
-                    context.read<StatsCubit>().changeMonth(DateTime.now());
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.15),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.replay_rounded, size: 12, color: Colors.orange),
-                        SizedBox(width: 4),
-                        Text(
-                          'العودة لليوم',
-                          style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                    child: const Text(
+                      'الحالي',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
+                else
+                  GestureDetector(
+                    onTap: () {
+                      context.read<StatsCubit>().changeMonth(DateTime.now());
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.replay_rounded,
+                            size: 12,
+                            color: Colors.orange,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'العودة لليوم',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
           IconButton(
             tooltip: 'الشهر التالي',
             icon: const Icon(Icons.chevron_left_rounded, size: 28),
@@ -680,8 +771,8 @@ class _StatsScreenState extends State<StatsScreen> {
     final Color statusColor = ratio <= 0.65
         ? AppTheme.primaryColor
         : ratio <= 0.90
-            ? Colors.orange.shade700
-            : Colors.red.shade700;
+        ? Colors.orange.shade700
+        : Colors.red.shade700;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -712,7 +803,11 @@ class _StatsScreenState extends State<StatsScreen> {
               const SizedBox(width: 8),
               Text(
                 '$percent%',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: statusColor),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: statusColor,
+                ),
               ),
             ],
           ),
@@ -730,10 +825,10 @@ class _StatsScreenState extends State<StatsScreen> {
           Text(
             income > 0
                 ? (ratio <= 0.65
-                    ? 'وضعك المالي ممتاز! صرفت $percent% وتوفر الباقي.'
-                    : ratio <= 0.90
-                        ? 'انتبه: صرفت $percent% من دخلك، راقب نفقاتك.'
-                        : 'تحذير: المصروفات قاربت أو تجاوزت الدخل الشهري!')
+                      ? 'وضعك المالي ممتاز! صرفت $percent% وتوفر الباقي.'
+                      : ratio <= 0.90
+                      ? 'انتبه: صرفت $percent% من دخلك، راقب نفقاتك.'
+                      : 'تحذير: المصروفات قاربت أو تجاوزت الدخل الشهري!')
                 : 'لم تسجل دخلاً لهذا الشهر حتى الآن.',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
@@ -746,13 +841,17 @@ class _StatsScreenState extends State<StatsScreen> {
     return Column(
       children: [
         // Card 1: Month-over-Month Comparison (مقارنة بالشهر السابق)
-        if (result.monthlyChangePercent != null && (result.totalPrevMonthExpense > 0 || result.totalMonthlyExpense > 0)) ...[
+        if (result.monthlyChangePercent != null &&
+            (result.totalPrevMonthExpense > 0 ||
+                result.totalMonthlyExpense > 0)) ...[
           _buildMonthlyComparisonCard(result),
           const SizedBox(height: 12),
         ],
 
         // Card 2: Weekly Spending Comparison (صرفك هذا الأسبوع مقارنة بالأسبوع الماضي - للشهر الحالي فقط)
-        if (result.isCurrentMonth && result.weeklyChangePercent != null && (result.thisWeekExpense > 0 || result.lastWeekExpense > 0)) ...[
+        if (result.isCurrentMonth &&
+            result.weeklyChangePercent != null &&
+            (result.thisWeekExpense > 0 || result.lastWeekExpense > 0)) ...[
           _buildWeeklyComparisonCard(result),
           const SizedBox(height: 12),
         ],
@@ -769,10 +868,7 @@ class _StatsScreenState extends State<StatsScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  Colors.teal.shade700,
-                  Colors.teal.shade900,
-                ],
+                colors: [Colors.teal.shade700, Colors.teal.shade900],
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
               ),
@@ -793,7 +889,11 @@ class _StatsScreenState extends State<StatsScreen> {
                     color: Colors.white.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.lightbulb_rounded, color: Colors.amber, size: 28),
+                  child: const Icon(
+                    Icons.lightbulb_rounded,
+                    color: Colors.amber,
+                    size: 28,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -842,13 +942,15 @@ class _StatsScreenState extends State<StatsScreen> {
 
     final IconData icon = isIdentical
         ? Icons.remove_rounded
-        : (isIncrease ? Icons.trending_up_rounded : Icons.trending_down_rounded);
+        : (isIncrease
+              ? Icons.trending_up_rounded
+              : Icons.trending_down_rounded);
 
     final String titleText = isIdentical
         ? 'مصروفاتك مطابقة تماماً للشهر السابق'
         : (isIncrease
-            ? 'المصروفات ارتفعت ${pct.abs().toStringAsFixed(0)}% عن الشهر السابق ⚠️'
-            : 'المصروفات انخفضت ${pct.abs().toStringAsFixed(0)}% مقارنة بالشهر السابق 🎉');
+              ? 'المصروفات ارتفعت ${pct.abs().toStringAsFixed(0)}% عن الشهر السابق ⚠️'
+              : 'المصروفات انخفضت ${pct.abs().toStringAsFixed(0)}% مقارنة بالشهر السابق 🎉');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -883,10 +985,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'هذا الشهر: ${_fmt.format(result.totalMonthlyExpense)} ر.ي | الشهر السابق: ${_fmt.format(result.totalPrevMonthExpense)} ر.ي',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                 ),
               ],
             ),
@@ -919,7 +1018,11 @@ class _StatsScreenState extends State<StatsScreen> {
               color: AppTheme.primaryColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.account_balance_wallet_rounded, color: AppTheme.primaryColor, size: 22),
+            child: const Icon(
+              Icons.account_balance_wallet_rounded,
+              color: AppTheme.primaryColor,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -970,13 +1073,15 @@ class _StatsScreenState extends State<StatsScreen> {
 
     final IconData icon = isIdentical
         ? Icons.remove_rounded
-        : (isIncrease ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded);
+        : (isIncrease
+              ? Icons.arrow_upward_rounded
+              : Icons.arrow_downward_rounded);
 
     final String titleText = isIdentical
         ? 'صرفك هذا الأسبوع مطابق للأسبوع الماضي'
         : (isIncrease
-            ? 'صرفك زاد ${pct.abs().toStringAsFixed(0)}% مقارنة بالأسبوع الماضي ⚠️'
-            : 'صرفك نقص ${pct.abs().toStringAsFixed(0)}% مقارنة بالأسبوع الماضي 🎉');
+              ? 'صرفك زاد ${pct.abs().toStringAsFixed(0)}% مقارنة بالأسبوع الماضي ⚠️'
+              : 'صرفك نقص ${pct.abs().toStringAsFixed(0)}% مقارنة بالأسبوع الماضي 🎉');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1011,10 +1116,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'هذا الأسبوع: ${_fmt.format(result.thisWeekExpense)} ر.ي | الأسبوع الماضي: ${_fmt.format(result.lastWeekExpense)} ر.ي',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                 ),
               ],
             ),
@@ -1050,10 +1152,7 @@ class _StatsScreenState extends State<StatsScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: bgColor,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
             child: Icon(icon, color: iconColor, size: 20),
           ),
           const SizedBox(height: 10),
@@ -1083,9 +1182,15 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildCategoryBreakdownSection(StatsLoaded state, StatsResult result) {
     final isExpense = state.activeType == 'expense';
-    final targetMap = isExpense ? result.categorySpending : result.categoryIncome;
-    final total = isExpense ? result.totalMonthlyExpense : result.totalMonthlyIncome;
-    final counts = isExpense ? result.categoryExpenseCount : result.categoryIncomeCount;
+    final targetMap = isExpense
+        ? result.categorySpending
+        : result.categoryIncome;
+    final total = isExpense
+        ? result.totalMonthlyExpense
+        : result.totalMonthlyIncome;
+    final counts = isExpense
+        ? result.categoryExpenseCount
+        : result.categoryIncomeCount;
 
     final entries = targetMap.entries.where((e) => e.value > 0).toList();
     entries.sort((a, b) => b.value.compareTo(a.value));
@@ -1117,7 +1222,10 @@ class _StatsScreenState extends State<StatsScreen> {
             children: [
               Text(
                 isExpense ? 'توزيع المصروفات بالتصنيف' : 'توزيع الدخل بالتصنيف',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               if (hasIncome)
                 SegmentedButton<String>(
@@ -1166,13 +1274,20 @@ class _StatsScreenState extends State<StatsScreen> {
               child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.pie_chart_outline_rounded, size: 48, color: Colors.grey.shade400),
+                    Icon(
+                      Icons.pie_chart_outline_rounded,
+                      size: 48,
+                      color: Colors.grey.shade400,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       isExpense
                           ? 'لا توجد مصروفات مسجلة في هذا الشهر.'
                           : 'لا يوجد دخل مسجل في هذا الشهر.',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -1196,7 +1311,9 @@ class _StatsScreenState extends State<StatsScreen> {
                               _touchedPieIndex = -1;
                               return;
                             }
-                            _touchedPieIndex = pieTouchResponse.touchedSection!.touchedSectionIndex;
+                            _touchedPieIndex = pieTouchResponse
+                                .touchedSection!
+                                .touchedSectionIndex;
                           });
                         },
                       ),
@@ -1206,7 +1323,9 @@ class _StatsScreenState extends State<StatsScreen> {
                         final entry = entries[i];
                         final isTouched = i == _touchedPieIndex;
                         final radius = isTouched ? 48.0 : 40.0;
-                        final pct = total > 0 ? (entry.value / total) * 100 : 0.0;
+                        final pct = total > 0
+                            ? (entry.value / total) * 100
+                            : 0.0;
                         final color = _getCategoryColor(entry.key);
 
                         return PieChartSectionData(
@@ -1239,7 +1358,11 @@ class _StatsScreenState extends State<StatsScreen> {
                             CircleAvatar(
                               radius: 16,
                               backgroundColor: color.withValues(alpha: 0.15),
-                              child: Icon(_getCategoryIcon(entry.key), size: 16, color: color),
+                              child: Icon(
+                                _getCategoryIcon(entry.key),
+                                size: 16,
+                                color: color,
+                              ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -1248,11 +1371,17 @@ class _StatsScreenState extends State<StatsScreen> {
                                 children: [
                                   Text(
                                     entry.key,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                   Text(
                                     '$count حركات • ${pct.toStringAsFixed(1)}%',
-                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -1262,7 +1391,9 @@ class _StatsScreenState extends State<StatsScreen> {
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: isExpense ? Colors.red.shade700 : Colors.green.shade700,
+                                color: isExpense
+                                    ? Colors.red.shade700
+                                    : Colors.green.shade700,
                               ),
                             ),
                           ],
@@ -1294,7 +1425,10 @@ class _StatsScreenState extends State<StatsScreen> {
                             const SizedBox(height: 12),
                             Text(
                               'إجمالي: ${_fmt.format(total)} ر.ي',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
@@ -1365,9 +1499,13 @@ class _StatsScreenState extends State<StatsScreen> {
           barRods: [
             BarChartRodData(
               toY: values[i],
-              color: values[i] > 0 ? AppTheme.primaryColor : Colors.grey.shade300,
+              color: values[i] > 0
+                  ? AppTheme.primaryColor
+                  : Colors.grey.shade300,
               width: isWeek ? 18 : 5,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(5),
+              ),
             ),
           ],
         ),
@@ -1421,7 +1559,9 @@ class _StatsScreenState extends State<StatsScreen> {
                 ],
                 selected: {state.timeframe},
                 onSelectionChanged: (newSelection) {
-                  context.read<StatsCubit>().switchTimeframe(newSelection.first);
+                  context.read<StatsCubit>().switchTimeframe(
+                    newSelection.first,
+                  );
                 },
                 style: ButtonStyle(
                   visualDensity: VisualDensity.compact,
@@ -1469,7 +1609,9 @@ class _StatsScreenState extends State<StatsScreen> {
                         if (idx >= 0 && idx < labels.length) {
                           if (!isWeek) {
                             final dayNum = idx + 1;
-                            if (dayNum != 1 && dayNum % 5 != 0 && dayNum != labels.length) {
+                            if (dayNum != 1 &&
+                                dayNum % 5 != 0 &&
+                                dayNum != labels.length) {
                               return const SizedBox.shrink();
                             }
                           }
@@ -1489,9 +1631,15 @@ class _StatsScreenState extends State<StatsScreen> {
                       },
                     ),
                   ),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
                 ),
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(show: false),
@@ -1506,7 +1654,9 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildWalletsBreakdown(BuildContext context, StatsResult result) {
     final walletsState = context.watch<WalletsCubit>().state;
-    final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+    final wallets = walletsState is WalletsLoaded
+        ? walletsState.wallets
+        : <Wallet>[];
 
     if (wallets.isEmpty || result.walletExpenses.isEmpty) {
       return const SizedBox.shrink();
@@ -1535,11 +1685,13 @@ class _StatsScreenState extends State<StatsScreen> {
           const SizedBox(height: 12),
           ...result.walletExpenses.entries.map((e) {
             final wallet = wallets.cast<Wallet?>().firstWhere(
-                  (w) => w?.id == e.key,
-                  orElse: () => null,
-                );
+              (w) => w?.id == e.key,
+              orElse: () => null,
+            );
             final name = wallet?.name ?? 'محفظة أخرى';
-            final color = wallet != null ? Color(wallet.colorValue) : AppTheme.primaryColor;
+            final color = wallet != null
+                ? Color(wallet.colorValue)
+                : AppTheme.primaryColor;
 
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -1549,18 +1701,30 @@ class _StatsScreenState extends State<StatsScreen> {
                     radius: 12,
                     backgroundColor: color,
                     child: Icon(
-                      wallet != null ? AppConstants.getWalletIcon(wallet.iconCodePoint) : Icons.wallet_rounded,
+                      wallet != null
+                          ? AppConstants.getWalletIcon(wallet.iconCodePoint)
+                          : Icons.wallet_rounded,
                       size: 13,
                       color: Colors.white,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                   Text(
                     '${_fmt.format(e.value)} ر.ي',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade700, fontSize: 14),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade700,
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),

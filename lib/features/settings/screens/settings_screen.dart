@@ -12,6 +12,7 @@ import 'package:mizaan/core/utils/responsive.dart';
 import 'package:mizaan/data/services/biometric_service.dart';
 import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/data/services/notification_service.dart';
+import 'package:mizaan/data/services/sms_service.dart';
 import 'package:mizaan/features/auth/cubit/auth_cubit.dart';
 import 'package:mizaan/features/auth/cubit/auth_state.dart';
 import 'package:mizaan/features/auth/screens/login_screen.dart';
@@ -27,16 +28,20 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
+class _SettingsScreenState extends State<SettingsScreen>
+    with WidgetsBindingObserver {
   final NumberFormat _fmt = NumberFormat('#,##0.##', 'ar');
 
   bool _biometricEnabled = false;
   bool _dailyReminderEnabled = true;
-  bool _smsAutoImportEnabled = true;
+  bool _smsAutoImportEnabled = false;
+  bool _smsPermissionGranted = false;
+  bool _smsSettingsBusy = false;
+  bool _batteryOptimizationExempt = false;
+  bool _batterySettingsBusy = false;
   bool _smsNotificationsEnabled = true;
   bool _manualTxNotificationsEnabled = true;
   bool _systemNotificationsGranted = true;
-  bool _isBatteryOptimizationIgnored = false;
   double _lowBalanceThreshold = 10000.0;
 
   @override
@@ -45,7 +50,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     _loadPreferences();
     _checkPermissionStatus();
-    _checkBatteryStatus();
+    _refreshSmsStatus();
+    _refreshBatteryOptimizationStatus();
   }
 
   @override
@@ -57,31 +63,64 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkBatteryStatus(retryIfFalse: true);
+      _refreshSmsStatus();
+      _refreshBatteryOptimizationStatus();
       _checkPermissionStatus();
     }
   }
 
-  Future<void> _checkBatteryStatus({bool retryIfFalse = false}) async {
-    if (!Platform.isAndroid) return;
-    try {
-      bool status = await Permission.ignoreBatteryOptimizations.isGranted;
-      if (mounted) setState(() => _isBatteryOptimizationIgnored = status);
+  bool get _smsReceiverReady => _smsPermissionGranted && _smsAutoImportEnabled;
 
-      if (!status && retryIfFalse) {
-        // Some Android OEMs (Samsung, Xiaomi) update PowerManager with a slight delay
-        for (int i = 0; i < 2; i++) {
-          await Future.delayed(const Duration(milliseconds: 400));
-          if (!mounted) return;
-          status = await Permission.ignoreBatteryOptimizations.isGranted;
-          if (status) {
-            setState(() => _isBatteryOptimizationIgnored = true);
-            break;
-          }
-        }
+  Future<void> _refreshSmsStatus() async {
+    if (!Platform.isAndroid) return;
+    final prefs = await SharedPreferences.getInstance();
+    final uid = DatabaseService.currentUserId ?? 'guest';
+    final granted = await const SmsService().hasPermission();
+    final enabled = SmsService.isAutoImportEnabled(prefs, uid: uid);
+    if (!granted && enabled) {
+      await SmsService.setAutoImportEnabled(prefs, uid: uid, value: false);
+    }
+    if (mounted) {
+      setState(() {
+        _smsPermissionGranted = granted;
+        _smsAutoImportEnabled = granted && enabled;
+      });
+    }
+  }
+
+  Future<void> _refreshBatteryOptimizationStatus() async {
+    if (!Platform.isAndroid) return;
+    final exempt = await Permission.ignoreBatteryOptimizations.isGranted;
+    if (mounted) {
+      setState(() => _batteryOptimizationExempt = exempt);
+    }
+  }
+
+  Future<void> _requestBatteryOptimizationExemption() async {
+    if (!Platform.isAndroid || _batterySettingsBusy) return;
+    setState(() => _batterySettingsBusy = true);
+    try {
+      final status = await Permission.ignoreBatteryOptimizations.request();
+      await _refreshBatteryOptimizationStatus();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              status.isGranted
+                  ? 'تم السماح لميزان بالعمل دون قيود البطارية'
+                  : 'لم يتم منح استثناء البطارية. يمكنك تغييره من إعدادات النظام.',
+            ),
+            action: status.isGranted
+                ? null
+                : SnackBarAction(
+                    label: 'الإعدادات',
+                    onPressed: openAppSettings,
+                  ),
+          ),
+        );
       }
-    } catch (e) {
-      debugPrint('Error checking battery optimization status: $e');
+    } finally {
+      if (mounted) setState(() => _batterySettingsBusy = false);
     }
   }
 
@@ -104,13 +143,17 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 
   String _userKey(String base) {
     final authState = context.read<AuthCubit>().state;
-    final uid = (authState is Authenticated && !authState.isGuest) ? authState.user?.uid : 'guest';
+    final uid = (authState is Authenticated && !authState.isGuest)
+        ? authState.user?.uid
+        : 'guest';
     return '${uid ?? 'guest'}_$base';
   }
 
   Future<void> _saveSetting(String baseKey, bool value) async {
     final authState = context.read<AuthCubit>().state;
-    final uid = (authState is Authenticated && !authState.isGuest) ? authState.user?.uid : null;
+    final uid = (authState is Authenticated && !authState.isGuest)
+        ? authState.user?.uid
+        : null;
     final dbUid = DatabaseService.currentUserId;
     final prefs = await SharedPreferences.getInstance();
 
@@ -127,7 +170,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 
   bool _getSetting(SharedPreferences prefs, String baseKey, bool defaultValue) {
     final authState = context.read<AuthCubit>().state;
-    final uid = (authState is Authenticated && !authState.isGuest) ? authState.user?.uid : null;
+    final uid = (authState is Authenticated && !authState.isGuest)
+        ? authState.user?.uid
+        : null;
     final dbUid = DatabaseService.currentUserId;
 
     if (uid != null && prefs.containsKey('${uid}_$baseKey')) {
@@ -150,13 +195,26 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     setState(() {
       _biometricEnabled = _getSetting(prefs, 'biometricEnabled', false);
       _dailyReminderEnabled = _getSetting(prefs, 'dailyReminderEnabled', true);
-      _smsAutoImportEnabled = _getSetting(prefs, 'smsAutoImportEnabled', true);
-      _smsNotificationsEnabled = _getSetting(prefs, 'smsNotificationsEnabled', true);
-      _manualTxNotificationsEnabled = _getSetting(prefs, 'manualTxNotificationsEnabled', true);
-      _lowBalanceThreshold = prefs.getDouble(_userKey('lowBalanceThreshold')) ??
+      _smsAutoImportEnabled = SmsService.isAutoImportEnabled(
+        prefs,
+        uid: DatabaseService.currentUserId ?? 'guest',
+      );
+      _smsNotificationsEnabled = _getSetting(
+        prefs,
+        'smsNotificationsEnabled',
+        true,
+      );
+      _manualTxNotificationsEnabled = _getSetting(
+        prefs,
+        'manualTxNotificationsEnabled',
+        true,
+      );
+      _lowBalanceThreshold =
+          prefs.getDouble(_userKey('lowBalanceThreshold')) ??
           prefs.getDouble('lowBalanceThreshold') ??
           10000.0;
     });
+    await _refreshSmsStatus();
   }
 
   Future<void> _toggleBiometric(bool value) async {
@@ -167,7 +225,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('جهازك لا يدعم المصادقة بالبصمة أو لم يتم إعدادها بعد'),
+              content: Text(
+                'جهازك لا يدعم المصادقة بالبصمة أو لم يتم إعدادها بعد',
+              ),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -181,7 +241,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         if (mounted) {
           String msg = 'تعذر تفعيل البصمة';
           if (result == BiometricAuthResult.notEnrolled) {
-            msg = 'لم يتم تسجيل بصمة في هذا الجهاز أو المحاكي. يرجى إضافة بصمة من إعدادات النظام أولاً.';
+            msg =
+                'لم يتم تسجيل بصمة في هذا الجهاز أو المحاكي. يرجى إضافة بصمة من إعدادات النظام أولاً.';
           } else if (result == BiometricAuthResult.lockedOut) {
             msg = 'تم قفل محاولات البصمة مؤقتاً لكثرة المحاولات الخاطئة.';
           } else if (result == BiometricAuthResult.notAvailable) {
@@ -201,7 +262,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       setState(() => _biometricEnabled = value);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(value ? 'تم تفعيل قفل البصمة بنجاح 🛡️' : 'تم تعطيل قفل البصمة'),
+          content: Text(
+            value ? 'تم تفعيل قفل البصمة بنجاح 🛡️' : 'تم تعطيل قفل البصمة',
+          ),
           backgroundColor: AppTheme.primaryColor,
           duration: const Duration(seconds: 2),
         ),
@@ -225,7 +288,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(value ? 'تم تفعيل التذكير اليومي (9:00 مساءً) ⏰' : 'تم تعطيل التذكير اليومي'),
+          content: Text(
+            value
+                ? 'تم تفعيل التذكير اليومي (9:00 مساءً) ⏰'
+                : 'تم تعطيل التذكير اليومي',
+          ),
           backgroundColor: AppTheme.primaryColor,
           duration: const Duration(seconds: 2),
         ),
@@ -234,16 +301,72 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   }
 
   Future<void> _toggleSmsAutoImport(bool value) async {
-    await _saveSetting('smsAutoImportEnabled', value);
-    setState(() => _smsAutoImportEnabled = value);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(value ? 'تم تفعيل الاستيراد التلقائي للرسائل 📥' : 'تم تعطيل الاستيراد التلقائي للرسائل'),
-          backgroundColor: AppTheme.primaryColor,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    if (_smsSettingsBusy || !Platform.isAndroid) return;
+    setState(() => _smsSettingsBusy = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final uid = DatabaseService.currentUserId ?? 'guest';
+
+      if (!value) {
+        await SmsService.setAutoImportEnabled(prefs, uid: uid, value: false);
+        if (mounted) {
+          setState(() {
+            _smsAutoImportEnabled = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم إيقاف استقبال واستيراد رسائل SMS'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final granted = await const SmsService().requestPermission();
+      if (granted) {
+        await SmsService.setAutoImportEnabled(prefs, uid: uid, value: true);
+        if (mounted) {
+          setState(() {
+            _smsPermissionGranted = true;
+            _smsAutoImportEnabled = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'تم تفعيل استقبال الرسائل والاستيراد التلقائي بنجاح',
+              ),
+              backgroundColor: AppTheme.primaryColor,
+            ),
+          );
+        }
+      } else {
+        await SmsService.setAutoImportEnabled(prefs, uid: uid, value: false);
+        final permanentlyDenied = await Permission.sms.isPermanentlyDenied;
+        if (mounted) {
+          setState(() {
+            _smsPermissionGranted = false;
+            _smsAutoImportEnabled = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                permanentlyDenied
+                    ? 'صلاحية SMS محظورة. افتح إعدادات التطبيق واسمح بالرسائل.'
+                    : 'لم يتم منح صلاحية SMS، لذلك لم يتم تفعيل المزامنة.',
+              ),
+              action: permanentlyDenied
+                  ? SnackBarAction(
+                      label: 'فتح الإعدادات',
+                      onPressed: openAppSettings,
+                    )
+                  : null,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _smsSettingsBusy = false);
     }
   }
 
@@ -261,7 +384,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(value ? 'تم تفعيل إشعارات حركات الرسائل (SMS) 🔔' : 'تم تعطيل إشعارات حركات الرسائل (SMS)'),
+          content: Text(
+            value
+                ? 'تم تفعيل إشعارات حركات الرسائل (SMS) 🔔'
+                : 'تم تعطيل إشعارات حركات الرسائل (SMS)',
+          ),
           backgroundColor: AppTheme.primaryColor,
           duration: const Duration(seconds: 2),
         ),
@@ -269,68 +396,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _requestBatteryOptimizationExemption() async {
-    if (!Platform.isAndroid) return;
-
-    // 1. If already granted, notify user and ensure state is updated
-    final alreadyGranted = await Permission.ignoreBatteryOptimizations.isGranted;
-    if (alreadyGranted) {
-      if (mounted) {
-        setState(() => _isBatteryOptimizationIgnored = true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('الاستماع في الخلفية مُفعّل بالفعل بدون قيود ⚡'),
-            backgroundColor: AppTheme.primaryColor,
-          ),
-        );
-      }
-      return;
-    }
-
-    // 2. Request exemption from the system dialog
-    try {
-      await Permission.ignoreBatteryOptimizations.request();
-    } catch (e) {
-      debugPrint('Error requesting battery optimization: $e');
-    }
-
-    // 3. Actively poll PowerManager directly because Android often returns
-    // RESULT_CANCELED from request() even when granted, and PowerManager takes ~200-500ms to update.
-    bool isGranted = false;
-    for (int i = 0; i < 5; i++) {
-      await Future.delayed(Duration(milliseconds: i == 0 ? 250 : 350));
-      if (!mounted) return;
-      isGranted = await Permission.ignoreBatteryOptimizations.isGranted;
-      if (isGranted) {
-        break;
-      }
-    }
-
-    if (mounted) {
-      setState(() => _isBatteryOptimizationIgnored = isGranted);
-      if (isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إلغاء قيود البطارية وتفعيل الاستماع بالخلفية بنجاح! ⚡'),
-            backgroundColor: AppTheme.primaryColor,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'يرجى اختيار "بلا قيود / Unrestricted" في إعدادات بطارية الهاتف للسماح بالعمل الدائم في الخلفية.',
-            ),
-            backgroundColor: Colors.amber.shade800,
-            action: SnackBarAction(
-              label: 'الإعدادات',
-              textColor: Colors.white,
-              onPressed: () => openAppSettings(),
-            ),
-          ),
-        );
-      }
-    }
+  Future<void> _requestSmsReceiverActivation() async {
+    await _toggleSmsAutoImport(!_smsReceiverReady);
   }
 
   Future<void> _toggleManualTxNotifications(bool value) async {
@@ -347,7 +414,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(value ? 'تم تفعيل إشعارات العمليات المالية 🔔' : 'تم تعطيل إشعارات العمليات المالية'),
+          content: Text(
+            value
+                ? 'تم تفعيل إشعارات العمليات المالية 🔔'
+                : 'تم تعطيل إشعارات العمليات المالية',
+          ),
           backgroundColor: AppTheme.primaryColor,
           duration: const Duration(seconds: 2),
         ),
@@ -356,7 +427,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   }
 
   Future<void> _editThresholdDialog() async {
-    final controller = TextEditingController(text: _lowBalanceThreshold.toStringAsFixed(0));
+    final controller = TextEditingController(
+      text: _lowBalanceThreshold.toStringAsFixed(0),
+    );
     final result = await showDialog<double>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -378,7 +451,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 decoration: const InputDecoration(
                   labelText: 'المبلغ (ر.ي)',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                  prefixIcon: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.amber,
+                  ),
                 ),
               ),
             ],
@@ -390,7 +466,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             child: const Text('إلغاء'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+            ),
             onPressed: () {
               final val = double.tryParse(controller.text.trim());
               if (val != null && val >= 0) {
@@ -434,22 +512,31 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   style: TextStyle(fontSize: 13, color: Colors.grey),
                 ),
                 const SizedBox(height: 12),
-                ...SmsSenderRegistry.defaultTemplates.map((tpl) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.check_circle_outline, size: 18, color: Colors.green),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${tpl.walletNameAr}: ${tpl.senderIds.join(', ')}',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                ...SmsSenderRegistry.defaultTemplates.map(
+                  (tpl) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline,
+                          size: 18,
+                          color: Colors.green,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${tpl.walletNameAr}: ${tpl.senderIds.join(', ')}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ],
-                      ),
-                    )),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const Divider(),
                 const Text(
                   'نظام ميزان يتعرف تلقائياً على رسائل الإيداع والخصم والسداد بدقة تامة.',
@@ -477,10 +564,16 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       final choice = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Row(
             children: [
-              Icon(Icons.shield_outlined, color: AppTheme.primaryColor, size: 26),
+              Icon(
+                Icons.shield_outlined,
+                color: AppTheme.primaryColor,
+                size: 26,
+              ),
               SizedBox(width: 8),
               Text('إدارة الحساب المحلي', style: TextStyle(fontSize: 18)),
             ],
@@ -526,7 +619,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       if (choice == 'reset' && mounted) {
         await context.read<AuthCubit>().resetLocalData();
         if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
         }
         return;
       }
@@ -536,18 +633,27 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Text('تسجيل الخروج'),
-          content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج من حسابك؟'),
+          content: const Text(
+            'هل أنت متأكد من رغبتك في تسجيل الخروج من حسابك؟',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+              ),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('تسجيل خروج', style: TextStyle(color: Colors.white)),
+              child: const Text(
+                'تسجيل خروج',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -558,7 +664,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       if (mounted) {
         await context.read<AuthCubit>().signOut();
         if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
         }
       }
     }
@@ -569,10 +679,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     return widget.isEmbedded
         ? _buildContent()
         : Scaffold(
-            appBar: AppBar(
-              title: const Text('الإعدادات'),
-              centerTitle: true,
-            ),
+            appBar: AppBar(title: const Text('الإعدادات'), centerTitle: true),
             body: _buildContent(),
           );
   }
@@ -593,12 +700,17 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             BlocBuilder<ThemeCubit, ThemeMode>(
               builder: (context, themeMode) {
                 return ListTile(
-                  leading: const Icon(Icons.palette_outlined, color: AppTheme.primaryColor),
+                  leading: const Icon(
+                    Icons.palette_outlined,
+                    color: AppTheme.primaryColor,
+                  ),
                   title: const Text('مظهر التطبيق'),
                   subtitle: Text(
                     themeMode == ThemeMode.system
                         ? 'تلقائي (حسب النظام)'
-                        : (themeMode == ThemeMode.dark ? 'الوضع الليلي 🌙' : 'الوضع الفاتح ☀️'),
+                        : (themeMode == ThemeMode.dark
+                              ? 'الوضع الليلي 🌙'
+                              : 'الوضع الفاتح ☀️'),
                     style: const TextStyle(fontSize: 12),
                   ),
                   trailing: DropdownButton<ThemeMode>(
@@ -635,7 +747,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           _buildCard([
             SwitchListTile(
               activeThumbColor: AppTheme.primaryColor,
-              secondary: const Icon(Icons.fingerprint_rounded, color: AppTheme.primaryColor),
+              secondary: const Icon(
+                Icons.fingerprint_rounded,
+                color: AppTheme.primaryColor,
+              ),
               title: const Text('قفل التطبيق بالبصمة / Face ID'),
               subtitle: const Text(
                 'طلب تأكيد الهوية عند فتح التطبيق أو العودة إليه لحماية بياناتك المالية',
@@ -660,7 +775,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               ),
               child: Row(
                 children: [
-                  Icon(Icons.notifications_off_rounded, color: Colors.amber.shade800),
+                  Icon(
+                    Icons.notifications_off_rounded,
+                    color: Colors.amber.shade800,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -677,7 +795,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                         const SizedBox(height: 2),
                         Text(
                           'لتصلك تنبيهات العمليات في شريط الهاتف بالأعلى، يرجى السماح بالإشعارات من إعدادات الهاتف.',
-                          style: TextStyle(color: Colors.amber.shade900, fontSize: 11),
+                          style: TextStyle(
+                            color: Colors.amber.shade900,
+                            fontSize: 11,
+                          ),
                         ),
                       ],
                     ),
@@ -688,7 +809,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                       await Future.delayed(const Duration(seconds: 1));
                       _checkPermissionStatus();
                     },
-                    child: const Text('فتح الإعدادات', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'فتح الإعدادات',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),
@@ -696,7 +820,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           _buildCard([
             SwitchListTile(
               activeThumbColor: AppTheme.primaryColor,
-              secondary: const Icon(Icons.receipt_long_rounded, color: AppTheme.primaryColor),
+              secondary: const Icon(
+                Icons.receipt_long_rounded,
+                color: AppTheme.primaryColor,
+              ),
               title: const Text('إشعارات العمليات المالية'),
               subtitle: const Text(
                 'تنبيه فوري في شريط الهاتف عند تسجيل أي مصروف أو إيداع يدوياً',
@@ -708,7 +835,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             const Divider(height: 1),
             SwitchListTile(
               activeThumbColor: AppTheme.primaryColor,
-              secondary: const Icon(Icons.notifications_active_outlined, color: AppTheme.primaryColor),
+              secondary: const Icon(
+                Icons.notifications_active_outlined,
+                color: AppTheme.primaryColor,
+              ),
               title: const Text('التذكير اليومي'),
               subtitle: const Text(
                 'تذكير في الساعة 9:00 مساءً لتسجيل مصروفات اليوم',
@@ -719,7 +849,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             ),
             const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+              leading: const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.amber,
+              ),
               title: const Text('تنبيه الرصيد المنخفض'),
               subtitle: Text(
                 'التنبيه عندما ينقص رصيد المحفظة عن ${_fmt.format(_lowBalanceThreshold)} ر.ي',
@@ -735,96 +868,175 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           if (Platform.isAndroid) ...[
             _buildSectionHeader('أتمتة الرسائل (SMS)'),
             _buildCard([
+              Container(
+                margin: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _smsReceiverReady
+                      ? Colors.green.withValues(alpha: 0.08)
+                      : Colors.amber.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _smsReceiverReady
+                        ? Colors.green.withValues(alpha: 0.35)
+                        : Colors.amber.withValues(alpha: 0.45),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _smsReceiverReady
+                          ? Icons.check_circle_rounded
+                          : Icons.info_rounded,
+                      color: _smsReceiverReady
+                          ? Colors.green.shade700
+                          : Colors.amber.shade800,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _smsReceiverReady
+                                ? 'مزامنة الرسائل جاهزة'
+                                : 'خطوة مطلوبة لتسجيل الحركات تلقائياً',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _smsReceiverReady
+                                ? 'صلاحية SMS ممنوحة والاستيراد التلقائي يعمل.'
+                                : 'فعّل الخيار التالي ثم وافق على صلاحية الرسائل من النظام.',
+                            style: const TextStyle(fontSize: 12, height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               SwitchListTile(
                 activeThumbColor: AppTheme.primaryColor,
-                secondary: const Icon(Icons.mark_email_read_rounded, color: AppTheme.primaryColor),
-                title: const Text('الاستيراد التلقائي للرسائل'),
-                subtitle: const Text(
-                  'استيراد حركات المحافظ في الخلفية فور وصول الرسالة أو فتح التطبيق',
-                  style: TextStyle(fontSize: 12),
+                secondary: _smsSettingsBusy
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        _smsReceiverReady
+                            ? Icons.mark_email_read_rounded
+                            : Icons.mark_email_unread_rounded,
+                        color: _smsReceiverReady
+                            ? Colors.green
+                            : AppTheme.primaryColor,
+                      ),
+                title: const Text('استقبال وتسجيل رسائل SMS تلقائياً'),
+                subtitle: Text(
+                  _smsReceiverReady
+                      ? 'مفعّل — الرسائل المالية الجديدة ستُسجل وتحدّث الرصيد.'
+                      : 'متوقف — اضغط للتفعيل ومنح صلاحية SMS.',
+                  style: const TextStyle(fontSize: 12),
                 ),
-                value: _smsAutoImportEnabled,
-                onChanged: _toggleSmsAutoImport,
+                value: _smsReceiverReady,
+                onChanged: _smsSettingsBusy ? null : _toggleSmsAutoImport,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Icon(
+                  _smsPermissionGranted
+                      ? Icons.verified_user_rounded
+                      : Icons.shield_outlined,
+                  color: _smsPermissionGranted ? Colors.green : Colors.amber,
+                ),
+                title: const Text('صلاحية قراءة واستقبال SMS'),
+                subtitle: Text(
+                  _smsPermissionGranted
+                      ? 'ممنوحة من نظام أندرويد'
+                      : 'غير ممنوحة — المزامنة لن تعمل بدونها',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: TextButton(
+                  onPressed: _smsSettingsBusy
+                      ? null
+                      : _requestSmsReceiverActivation,
+                  child: Text(_smsReceiverReady ? 'إيقاف' : 'تفعيل'),
+                ),
+                onTap: _smsSettingsBusy ? null : _requestSmsReceiverActivation,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: _batterySettingsBusy
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        _batteryOptimizationExempt
+                            ? Icons.battery_charging_full_rounded
+                            : Icons.battery_alert_rounded,
+                        color: _batteryOptimizationExempt
+                            ? Colors.green
+                            : Colors.orange,
+                      ),
+                title: const Text('العمل في الخلفية'),
+                subtitle: Text(
+                  _batteryOptimizationExempt
+                      ? 'مسموح دون قيود البطارية — مناسب للأجهزة التي تغلق التطبيقات بقوة.'
+                      : 'اختياري: فعّله إذا كان هاتفك يؤخر استقبال الحركات عند إغلاق التطبيق.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: TextButton(
+                  onPressed: _batterySettingsBusy
+                      ? null
+                      : _requestBatteryOptimizationExemption,
+                  child: Text(_batteryOptimizationExempt ? 'مفعّل' : 'تفعيل'),
+                ),
+                onTap: _batterySettingsBusy
+                    ? null
+                    : _requestBatteryOptimizationExemption,
               ),
               const Divider(height: 1),
               SwitchListTile(
                 activeThumbColor: AppTheme.primaryColor,
-                secondary: const Icon(Icons.notifications_active_rounded, color: AppTheme.primaryColor),
+                secondary: const Icon(
+                  Icons.notifications_active_rounded,
+                  color: AppTheme.primaryColor,
+                ),
                 title: const Text('إشعارات الحركات (SMS)'),
                 subtitle: const Text(
-                  'تنبيه فوري عند وصول رسائل عمليات الإيداع أو المشتريات والخصم',
+                  'تنبيه عند وصول إيداع أو شراء أو خصم مالي',
                   style: TextStyle(fontSize: 12),
                 ),
                 value: _smsNotificationsEnabled,
                 onChanged: _toggleSmsNotifications,
               ),
               const Divider(height: 1),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                decoration: BoxDecoration(
-                  color: _isBatteryOptimizationIgnored
-                      ? Colors.green.withValues(alpha: 0.05)
-                      : Colors.amber.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
+              ListTile(
+                leading: const Icon(
+                  Icons.sync_rounded,
+                  color: AppTheme.primaryColor,
                 ),
-                child: ListTile(
-                  leading: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: Icon(
-                      _isBatteryOptimizationIgnored ? Icons.bolt_rounded : Icons.battery_alert_rounded,
-                      key: ValueKey(_isBatteryOptimizationIgnored),
-                      color: _isBatteryOptimizationIgnored ? Colors.green : Colors.amber.shade700,
-                      size: 26,
-                    ),
-                  ),
-                  title: const Text('الاستماع في الخلفية (إلغاء قيود البطارية)'),
-                  subtitle: Text(
-                    _isBatteryOptimizationIgnored
-                        ? 'الاستماع بالخلفية مُفعّل بدون قيود من النظام (يعمل والتطبيق مغلق)'
-                        : 'مهم جداً: اضغط هنا للسماح بالعمل الدائم في الخلفية وتسجيل الحركات',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _isBatteryOptimizationIgnored ? Colors.green.shade700 : Colors.amber.shade900,
-                    ),
-                  ),
-                  trailing: _isBatteryOptimizationIgnored
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.check_circle_rounded, color: Colors.green, size: 16),
-                              SizedBox(width: 4),
-                              Text(
-                                'مُفعّل',
-                                style: TextStyle(
-                                  color: Colors.green,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : TextButton(
-                          onPressed: _requestBatteryOptimizationExemption,
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppTheme.primaryColor,
-                            textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          child: const Text('سماح'),
-                        ),
-                  onTap: _requestBatteryOptimizationExemption,
+                title: const Text('فحص الرسائل الآن'),
+                subtitle: const Text(
+                  'استيراد الرسائل المالية السابقة ومراجعتها قبل الحفظ',
+                  style: TextStyle(fontSize: 12),
                 ),
+                trailing: const Icon(Icons.chevron_left_rounded),
+                onTap: () => Navigator.pushNamed(context, AppRoutes.smsSync),
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.primaryColor),
+                leading: const Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  color: AppTheme.primaryColor,
+                ),
                 title: const Text('إدارة مرسلي المحافظ'),
                 subtitle: const Text(
                   'عرض قائمة مرسلي الرسائل المدعومين',
@@ -841,7 +1053,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           _buildSectionHeader('المساعدة والدليل 💡'),
           _buildCard([
             ListTile(
-              leading: const Icon(Icons.lightbulb_outline_rounded, color: AppTheme.primaryColor),
+              leading: const Icon(
+                Icons.lightbulb_outline_rounded,
+                color: AppTheme.primaryColor,
+              ),
               title: const Text('دليل وتلميحات ميزان'),
               subtitle: const Text(
                 'تعرف على آلية عمل التطبيق، الخصوصية، وحلول مشاكل الخلفية للأجهزة المختلفة',
@@ -852,7 +1067,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             ),
             const Divider(height: 1),
             ListTile(
-              leading: const Icon(Icons.restart_alt_rounded, color: AppTheme.secondaryColor),
+              leading: const Icon(
+                Icons.restart_alt_rounded,
+                color: AppTheme.secondaryColor,
+              ),
               title: const Text('إظهار دليل البداية السريعة في الرئيسية'),
               subtitle: const Text(
                 'إعادة تفعيل بطاقة الخطوات الترحيبية في الشاشة الرئيسية',
@@ -865,7 +1083,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('تمت إعادة إظهار دليل البداية السريعة في الشاشة الرئيسية ✅'),
+                      content: Text(
+                        'تمت إعادة إظهار دليل البداية السريعة في الشاشة الرئيسية ✅',
+                      ),
                       backgroundColor: AppTheme.primaryColor,
                     ),
                   );
@@ -879,7 +1099,9 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           BlocBuilder<AuthCubit, AuthState>(
             builder: (context, state) {
               final isGuest = state is Authenticated && state.isGuest;
-              final titleText = isGuest ? 'إعادة ضبط الحساب المحلي (مسح السجلات)' : 'تسجيل الخروج';
+              final titleText = isGuest
+                  ? 'إعادة ضبط الحساب المحلي (مسح السجلات)'
+                  : 'تسجيل الخروج';
               final subtitleText = isGuest
                   ? 'حذف المحافظ والعمليات من هذا الهاتف والبدء من جديد'
                   : 'الخروج بأمان من حسابك السحابي الحالي';
@@ -892,12 +1114,17 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 ),
                 child: ListTile(
                   leading: Icon(
-                    isGuest ? Icons.cleaning_services_rounded : Icons.logout_rounded,
+                    isGuest
+                        ? Icons.cleaning_services_rounded
+                        : Icons.logout_rounded,
                     color: Colors.red.shade700,
                   ),
                   title: Text(
                     titleText,
-                    style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   subtitle: Text(
                     subtitleText,
@@ -927,9 +1154,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 1,
-      child: Column(
-        children: children,
-      ),
+      child: Column(children: children),
     );
   }
 
@@ -1036,7 +1261,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(20),
@@ -1044,7 +1272,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.lock_outline_rounded, color: Colors.greenAccent, size: 14),
+                          Icon(
+                            Icons.lock_outline_rounded,
+                            color: Colors.greenAccent,
+                            size: 14,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'مشفر محلياً',
@@ -1055,7 +1287,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(20),
@@ -1063,7 +1298,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.cloud_off_rounded, color: Colors.cyanAccent, size: 14),
+                          Icon(
+                            Icons.cloud_off_rounded,
+                            color: Colors.cyanAccent,
+                            size: 14,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'بدون خوادم خارجية',
@@ -1079,7 +1318,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 const SizedBox(height: 12),
                 const Text(
                   'لحفظ سجلاتك ضد الضياع والوصول إليها من أي جهاز، فعّل المزامنة السحابية (سيتم ترحيل كافة محافظك وسجلاتك الحالية فوراً وبأمان):',
-                  style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
@@ -1089,18 +1332,25 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       elevation: 2,
                     ),
                     icon: const Icon(Icons.cloud_upload_rounded, size: 18),
                     label: const Text(
                       'ترقية وتفعيل المزامنة السحابية ☁️',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const RegisterScreen(),
+                        ),
                       );
                     },
                   ),
@@ -1140,10 +1390,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           padding: const EdgeInsets.all(18.0),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [
-                AppTheme.primaryColor,
-                AppTheme.secondaryColor,
-              ],
+              colors: [AppTheme.primaryColor, AppTheme.secondaryColor],
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
             ),
@@ -1164,7 +1411,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   color: Colors.white.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.person_rounded, color: Colors.white, size: 28),
+                child: const Icon(
+                  Icons.person_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1189,7 +1440,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(8),
@@ -1197,11 +1451,19 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.cloud_done_rounded, color: Colors.white, size: 12),
+                          Icon(
+                            Icons.cloud_done_rounded,
+                            color: Colors.white,
+                            size: 12,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'متصل بالسحابة (مُؤمّن)',
-                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),

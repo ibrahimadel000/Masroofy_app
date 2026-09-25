@@ -7,6 +7,8 @@ import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/services/database_service.dart';
 
 class TransactionRepository {
+  static final Set<String> _inFlightSmsSaves = {};
+
   final Box<TransactionModel>? _customBox;
   final Box<bool>? _customKeysBox;
   final FirebaseFirestore? _customFirestore;
@@ -17,14 +19,17 @@ class TransactionRepository {
     Box<bool>? keysBox,
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
-  })  : _customBox = box,
-        _customKeysBox = keysBox,
-        _customFirestore = firestore,
-        _customAuth = auth;
+  }) : _customBox = box,
+       _customKeysBox = keysBox,
+       _customFirestore = firestore,
+       _customAuth = auth;
 
   Box<TransactionModel>? get _safeBox {
     try {
-      return _customBox ?? (DatabaseService.isInitialized ? DatabaseService.transactionsBox : null);
+      return _customBox ??
+          (DatabaseService.isInitialized
+              ? DatabaseService.transactionsBox
+              : null);
     } catch (_) {
       return null;
     }
@@ -32,7 +37,8 @@ class TransactionRepository {
 
   Box<bool>? get _safeKeysBox {
     try {
-      return _customKeysBox ?? (DatabaseService.isInitialized ? DatabaseService.smsKeysBox : null);
+      return _customKeysBox ??
+          (DatabaseService.isInitialized ? DatabaseService.smsKeysBox : null);
     } catch (_) {
       return null;
     }
@@ -67,19 +73,19 @@ class TransactionRepository {
   /// Normalize any text for robust semantic comparison (removes whitespace, punctuation, normalizes digits)
   static String normalizeBodyForComparison(String? text) {
     if (text == null || text.trim().isEmpty) return '';
-    return SmsSenderRegistry.normalizeDigits(text)
-        .toLowerCase()
-        .replaceAll(RegExp(r'[\s\r\n\t,.:\-_/\\|]+'), '')
-        .trim();
+    return SmsSenderRegistry.normalizeDigits(
+      text,
+    ).toLowerCase().replaceAll(RegExp(r'[\s\r\n\t,.:\-_/\\|]+'), '').trim();
   }
 
   /// Deduplicate a list of transactions in memory ensuring each real operation appears only once
-  static List<TransactionModel> deduplicateList(List<TransactionModel> rawList) {
+  static List<TransactionModel> deduplicateList(
+    List<TransactionModel> rawList,
+  ) {
     if (rawList.length <= 1) return rawList;
 
     final List<TransactionModel> uniqueList = [];
     final Set<String> seenIds = {};
-    final Set<String> seenRefs = {};
     final Set<String> seenKeys = {};
 
     for (final tx in rawList) {
@@ -87,18 +93,9 @@ class TransactionRepository {
 
       bool isDup = false;
 
-      // 1. Match by reference number (100% unique bank ID)
-      final ref = tx.referenceNumber;
-      if (ref != null && ref.isNotEmpty) {
-        if (seenRefs.contains(ref)) {
-          isDup = true;
-        } else {
-          seenRefs.add(ref);
-        }
-      }
-
-      // 2. Match by smsKey
-      if (!isDup && tx.smsKey != null && tx.smsKey!.isNotEmpty) {
+      // 1. Match by smsKey. Reference-like fields are not used alone:
+      // some providers repeat an account/subscriber number across deposits.
+      if (tx.smsKey != null && tx.smsKey!.isNotEmpty) {
         if (seenKeys.contains(tx.smsKey)) {
           isDup = true;
         } else {
@@ -114,28 +111,23 @@ class TransactionRepository {
           if (accepted.walletId == tx.walletId &&
               accepted.type == tx.type &&
               (accepted.amount - tx.amount).abs() < 0.01) {
-            // If both have SMS/note content, compare normalized text
-            if (normText.isNotEmpty) {
-              final acceptedNorm = normalizeBodyForComparison(accepted.rawSmsBody ?? accepted.note);
-              if (acceptedNorm.isNotEmpty && acceptedNorm == normText) {
-                // For identical generic SMS bodies (e.g. deposits without refs), only consider duplicate if within 24 hours
-                final diff = accepted.date.difference(tx.date).abs();
-                if (diff.inHours < 24) {
-                  isDup = true;
-                  break;
-                }
-              }
-            }
-
-            final isSms = tx.source == 'sms' ||
+            final isSms =
+                tx.source == 'sms' ||
                 accepted.source == 'sms' ||
                 tx.rawSmsBody != null ||
                 accepted.rawSmsBody != null;
 
-            if (!isSms) {
+            if (isSms) {
+              if (_isDuplicateSmsRecord(incoming: tx, existing: accepted)) {
+                isDup = true;
+                break;
+              }
+            } else {
               // Purely manual: only consider duplicate if within 5 minutes and same note
               final diff = accepted.date.difference(tx.date).abs();
-              if (diff.inMinutes <= 5 && accepted.note == tx.note) {
+              if (normText.isNotEmpty &&
+                  diff.inMinutes <= 5 &&
+                  accepted.note == tx.note) {
                 isDup = true;
                 break;
               }
@@ -151,6 +143,73 @@ class TransactionRepository {
     }
 
     return uniqueList;
+  }
+
+  /// Returns true only when two SMS records represent the same delivery or
+  /// the same identifiable purchase.
+  static bool _isDuplicateSmsRecord({
+    required TransactionModel incoming,
+    required TransactionModel existing,
+  }) {
+    if (incoming.walletId != existing.walletId ||
+        incoming.type != existing.type ||
+        (incoming.amount - existing.amount).abs() >= 0.01) {
+      return false;
+    }
+
+    final incomingBody = incoming.rawSmsBody ?? incoming.note;
+    final existingBody = existing.rawSmsBody ?? existing.note;
+    final incomingNorm = normalizeBodyForComparison(incomingBody);
+    final existingNorm = normalizeBodyForComparison(existingBody);
+    if (incomingNorm.isEmpty || incomingNorm != existingNorm) return false;
+
+    final timestampDiff = incoming.date.difference(existing.date).abs();
+    if (timestampDiff.inSeconds <= 10) return true;
+
+    final incomingReference = incoming.referenceNumber;
+    final existingReference = existing.referenceNumber;
+    final isPurchase = _isPurchaseText(incomingBody);
+
+    if (isPurchase &&
+        incomingReference != null &&
+        incomingReference == existingReference) {
+      return true;
+    }
+
+    if (incomingReference == null &&
+        existingReference == null &&
+        _isSameCalendarDay(incoming.date, existing.date)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static bool _isSameCalendarDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  static bool _isPurchaseText(String? text) {
+    if (text == null || text.trim().isEmpty) return false;
+    final normalized = text.toLowerCase();
+    const purchaseTerms = [
+      'شراء',
+      'مشتريات',
+      'حاسب',
+      'نقاط البيع',
+      'سداد',
+      'دفع',
+      'purchase',
+      'payment',
+      'pos',
+    ];
+    return purchaseTerms.any(normalized.contains);
+  }
+
+  static String _smsSaveFingerprint(TransactionModel tx) {
+    final sender = (tx.rawSmsSender ?? '').trim().toLowerCase();
+    final body = normalizeBodyForComparison(tx.rawSmsBody ?? tx.note);
+    return '$sender|${tx.walletId}|${tx.type}|${tx.amount}|$body';
   }
 
   List<TransactionModel> getTransactions() {
@@ -239,29 +298,23 @@ class TransactionRepository {
 
       final allTxs = box.values;
 
-      // 2. Reference number match (bank reference numbers are 100% unique)
-      if (referenceNumber != null && referenceNumber.isNotEmpty) {
-        for (final tx in allTxs) {
-          if (tx.referenceNumber == referenceNumber) return true;
-        }
-      }
+      final incoming = TransactionModel(
+        id: '__incoming_sms_probe__',
+        walletId: walletId,
+        type: type,
+        amount: amount,
+        category: 'sms',
+        note: rawSmsBody,
+        date: date,
+        source: 'sms',
+        smsKey: smsKey,
+        createdAt: date,
+        rawSmsBody: rawSmsBody,
+      );
 
-      // 3. Match by normalized SMS body / note (IDENTICAL SMS BODY)
-      final normBody = normalizeBodyForComparison(rawSmsBody);
-
-      if (normBody.isNotEmpty) {
-        for (final tx in allTxs) {
-          if (tx.walletId == walletId &&
-              tx.type == type &&
-              (tx.amount - amount).abs() < 0.01) {
-            
-            // Only consider identical SMS bodies as duplicate if they are within 24 hours
-            final diff = tx.date.difference(date).abs();
-            if (diff.inHours < 24) {
-              final txNorm = normalizeBodyForComparison(tx.rawSmsBody ?? tx.note);
-              if (txNorm.isNotEmpty && txNorm == normBody) return true;
-            }
-          }
+      for (final tx in allTxs) {
+        if (_isDuplicateSmsRecord(incoming: incoming, existing: tx)) {
+          return true;
         }
       }
 
@@ -335,28 +388,80 @@ class TransactionRepository {
   }
 
   Future<void> saveTransaction(TransactionModel tx) async {
-    // 1. Local write to Hive (offline-first source of truth)
-    await _box.put(tx.id, tx);
-
-    if (tx.smsKey != null) {
-      await saveSmsKey(tx.smsKey!);
+    String? inFlightFingerprint;
+    if (tx.source == 'sms') {
+      inFlightFingerprint = _smsSaveFingerprint(tx);
+      if (!_inFlightSmsSaves.add(inFlightFingerprint)) return;
     }
 
-    // 2. Attempt sync to Firestore in background (fire-and-forget so offline execution never hangs)
-    final uid = _currentUserId;
-    final fs = _firestore;
-    if (uid != null && fs != null) {
-      unawaited(
-        fs
-            .collection('users')
-            .doc(uid)
-            .collection('transactions')
-            .doc(tx.id)
-            .set(tx.toMap(), SetOptions(merge: true))
-            .timeout(const Duration(seconds: 3))
-            .catchError((_) {}),
-      );
+    try {
+      final existingWithSameId = _safeBox?.get(tx.id);
+      if (existingWithSameId == null &&
+          tx.source == 'sms' &&
+          isDuplicateSms(
+            smsKey: tx.smsKey ?? '',
+            referenceNumber: tx.referenceNumber,
+            rawSmsBody: tx.rawSmsBody ?? tx.note,
+            walletId: tx.walletId,
+            amount: tx.amount,
+            type: tx.type,
+            date: tx.date,
+          )) {
+        return;
+      }
+
+      // 1. Local write to Hive (offline-first source of truth)
+      await _box.put(tx.id, tx);
+
+      if (tx.smsKey != null) {
+        await saveSmsKey(tx.smsKey!);
+      }
+
+      // 2. Attempt sync to Firestore in background (fire-and-forget so offline execution never hangs)
+      final uid = _currentUserId;
+      final fs = _firestore;
+      if (uid != null && fs != null) {
+        unawaited(
+          fs
+              .collection('users')
+              .doc(uid)
+              .collection('transactions')
+              .doc(tx.id)
+              .set(tx.toCloudMap(), SetOptions(merge: true))
+              .timeout(const Duration(seconds: 3))
+              .catchError((_) {}),
+        );
+      }
+    } finally {
+      if (inFlightFingerprint != null) {
+        _inFlightSmsSaves.remove(inFlightFingerprint);
+      }
     }
+  }
+
+  Future<int> purgeBlockedSenderTransactions() async {
+    final box = _safeBox;
+    if (box == null) return 0;
+
+    final blocked = box.values
+        .where((tx) => SmsSenderRegistry.isBlockedSender(tx.rawSmsSender ?? ''))
+        .map((tx) => tx.id)
+        .toList(growable: false);
+    for (final id in blocked) {
+      await deleteTransaction(id);
+    }
+    return blocked.length;
+  }
+
+  Future<int> deleteTransactionsForWallet(String walletId) async {
+    final ids = _box.values
+        .where((tx) => tx.walletId == walletId)
+        .map((tx) => tx.id)
+        .toList(growable: false);
+    for (final id in ids) {
+      await deleteTransaction(id);
+    }
+    return ids.length;
   }
 
   Future<void> deleteTransaction(String id) async {
@@ -394,9 +499,14 @@ class TransactionRepository {
 
       for (final doc in snapshot.docs) {
         final tx = TransactionModel.fromMap(doc.data());
-        await _box.put(tx.id, tx);
-        if (tx.smsKey != null) {
-          await saveSmsKey(tx.smsKey!);
+        // Hive is the local source of truth. Do not overwrite a local SMS
+        // transaction during startup with an older/cloud-stripped copy.
+        // Firestore only fills records that are not present locally.
+        if (!_box.containsKey(tx.id)) {
+          await _box.put(tx.id, tx);
+          if (tx.smsKey != null) {
+            await saveSmsKey(tx.smsKey!);
+          }
         }
       }
       await cleanDuplicateTransactions();

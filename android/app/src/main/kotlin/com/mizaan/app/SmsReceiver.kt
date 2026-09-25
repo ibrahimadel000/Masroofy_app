@@ -82,7 +82,7 @@ class SmsReceiver : BroadcastReceiver() {
             }
 
             val body = fullBody.toString().trim()
-            Log.d(TAG, "Incoming SMS from '$sender': $body")
+            Log.d(TAG, "Incoming financial SMS received (content redacted)")
 
             if (sender.isEmpty() || body.isEmpty()) return
 
@@ -112,23 +112,25 @@ class SmsReceiver : BroadcastReceiver() {
                 Log.d(TAG, "Notification skipped because SMS notifications are disabled by user")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error processing incoming background SMS: ${e.message}", e)
+            Log.e(TAG, "Failed to process incoming SMS")
         }
     }
 
     private fun isFinancialMessage(sender: String, body: String): Boolean {
         val cleanSender = sender.lowercase()
+        val normalizedSender = cleanSender.replace(Regex("[^a-z0-9]"), "")
+        if (normalizedSender == "mfloos") return false
         val cleanBody = body.lowercase()
 
-        // Match test messages so user can easily verify background receiver
-        if (cleanBody.contains("test") || cleanBody.contains("تجربة") || cleanBody.contains("اختبار")) {
-            return true
+        val senderForMatching = cleanSender.replace(Regex("[^\\p{L}\\p{N}]"), "")
+        val hasKnownSender = KNOWN_SENDERS.any { rawId ->
+            val id = rawId.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+            if (id.length <= 3) senderForMatching == id else senderForMatching.contains(id)
         }
-
-        val hasKnownSender = KNOWN_SENDERS.any { cleanSender.contains(it) }
+        if (!hasKnownSender) return false
+        val isTest = cleanBody.contains("test") || cleanBody.contains("تجربة") || cleanBody.contains("اختبار")
         val hasKeyword = FINANCIAL_KEYWORDS.any { cleanBody.contains(it) }
-
-        return hasKnownSender || hasKeyword
+        return isTest || hasKeyword
     }
 
     private fun resolveWalletName(sender: String, body: String): String {
@@ -170,7 +172,7 @@ class SmsReceiver : BroadcastReceiver() {
                 vibrationPattern = longArrayOf(0, 300, 200, 300)
                 enableLights(true)
                 setSound(defaultSoundUri, audioAttributes)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -208,13 +210,13 @@ class SmsReceiver : BroadcastReceiver() {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.launcher_icon)
             .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body).setSummaryText("ميزان"))
+            .setContentText("تم استلام حركة مالية جديدة. افتح ميزان لمراجعة التفاصيل.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("تم استلام حركة مالية جديدة. افتح ميزان لمراجعة التفاصيل.").setSummaryText("ميزان"))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setSound(defaultSoundUri)
             .setVibrate(longArrayOf(0, 300, 200, 300))
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
@@ -233,8 +235,8 @@ class SmsReceiver : BroadcastReceiver() {
             // Prevent exact duplicates in queue
             for (i in 0 until jsonArray.length()) {
                 val item = jsonArray.getJSONObject(i)
-                if (item.optString("sender") == sender && item.optString("body") == body) {
-                    return // Already queued
+                if (item.optString("sender") == sender && item.optString("body") == body && item.optLong("date") == timestamp) {
+                    return // Same broadcast already queued
                 }
             }
 
@@ -244,11 +246,12 @@ class SmsReceiver : BroadcastReceiver() {
                 put("date", timestamp)
             }
             jsonArray.put(newItem)
+            while (jsonArray.length() > 100) jsonArray.remove(0)
 
-            // CRITICAL: Use commit() instead of apply() to guarantee synchronous write before Android can terminate receiver
+            // Commit synchronously before Android can terminate the receiver.
             prefs.edit().putString(QUEUE_KEY, jsonArray.toString()).commit()
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving pending SMS to SharedPreferences: ${e.message}", e)
+            Log.e(TAG, "Failed to persist pending SMS")
         }
     }
 
@@ -259,21 +262,15 @@ class SmsReceiver : BroadcastReceiver() {
             if (!activeUserId.isNullOrEmpty()) {
                 val userKey = "flutter.${activeUserId}_smsAutoImportEnabled"
                 if (prefs.contains(userKey)) {
-                    return prefs.getBoolean(userKey, true)
+                    return prefs.getBoolean(userKey, false)
                 }
             }
             if (prefs.contains("flutter.smsAutoImportEnabled")) {
-                return prefs.getBoolean("flutter.smsAutoImportEnabled", true)
+                return prefs.getBoolean("flutter.smsAutoImportEnabled", false)
             }
-            for (key in prefs.all.keys) {
-                if (key.endsWith("smsAutoImportEnabled")) {
-                    val v = prefs.all[key]
-                    if (v is Boolean) return v
-                }
-            }
-            true
+            false
         } catch (e: Exception) {
-            true
+            false
         }
     }
 
@@ -284,7 +281,7 @@ class SmsReceiver : BroadcastReceiver() {
             if (!activeUserId.isNullOrEmpty()) {
                 val userKey = "flutter.${activeUserId}_smsNotificationsEnabled"
                 if (prefs.contains(userKey)) {
-                    return prefs.getBoolean(userKey, true)
+                    return prefs.getBoolean(userKey, false)
                 }
             }
             if (prefs.contains("flutter.smsNotificationsEnabled")) {

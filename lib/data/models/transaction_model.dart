@@ -102,6 +102,14 @@ class TransactionModel extends HiveObject {
     };
   }
 
+  /// Raw SMS data stays on-device and is never uploaded to Firestore.
+  Map<String, dynamic> toCloudMap() {
+    final map = toMap();
+    map.remove('rawSmsBody');
+    map.remove('rawSmsSender');
+    return map;
+  }
+
   factory TransactionModel.fromMap(Map<String, dynamic> map) {
     return TransactionModel(
       id: map['id'] as String,
@@ -124,7 +132,10 @@ class TransactionModel extends HiveObject {
     final text = rawSmsBody ?? note;
     if (text == null || text.isEmpty) return null;
     final patterns = [
-      RegExp(r'(?:المرجع|مرجع|ref(?:erence)?|رقم العملية|رقم المرجع|رقم الحوالة)[\s:]*([0-9a-zA-Z]+)', caseSensitive: false),
+      RegExp(
+        r'(?:المرجع|مرجع|ref(?:erence)?|رقم العملية|رقم المرجع|رقم الحوالة)[\s:]*([0-9a-zA-Z]+)',
+        caseSensitive: false,
+      ),
     ];
     for (final p in patterns) {
       final match = p.firstMatch(text);
@@ -155,14 +166,14 @@ class TransactionModel extends HiveObject {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        walletId,
-        type,
-        amount,
-        category,
-        note,
-        date,
-        source,
-        smsKey,
-      );
+    id,
+    walletId,
+    type,
+    amount,
+    category,
+    note,
+    date,
+    source,
+    smsKey,
+  );
 }

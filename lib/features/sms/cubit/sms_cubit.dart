@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mizaan/data/models/transaction_model.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
@@ -38,6 +39,10 @@ class SmsCubit extends Cubit<SmsState> {
         return;
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      final uid = DatabaseService.currentUserId ?? 'guest';
+      await SmsService.setAutoImportEnabled(prefs, uid: uid, value: true);
+
       emit(SmsScanning());
 
       final items = await smsService.scanRecentWalletSms(
@@ -46,9 +51,16 @@ class SmsCubit extends Cubit<SmsState> {
         customMappings: customMappings,
       );
 
+      await prefs.setBool('${uid}_smsInitialScanCompleted', true);
       emit(SmsLoaded(items: items, totalScanned: items.length));
+    } on TimeoutException {
+      emit(
+        const SmsError(
+          'استغرق فحص صندوق الرسائل وقتاً طويلاً. تأكد من صلاحية SMS ثم أعد المحاولة.',
+        ),
+      );
     } catch (e) {
-      emit(SmsError('حدث خطأ أثناء فحص الرسائل: $e'));
+      emit(SmsError('تعذر فحص الرسائل. تحقق من الصلاحية ثم حاول مجدداً: $e'));
     }
   }
 
@@ -58,7 +70,7 @@ class SmsCubit extends Cubit<SmsState> {
       final current = (state as SmsLoaded);
       final updatedList = List<SmsCandidateItem>.from(current.items);
       final item = updatedList[index];
-      item.isSelected = !item.isSelected;
+      updatedList[index] = item.copyWith(isSelected: !item.isSelected);
       emit(SmsLoaded(items: updatedList, totalScanned: current.totalScanned));
     }
   }
@@ -67,10 +79,9 @@ class SmsCubit extends Cubit<SmsState> {
   void toggleSelectAll(bool select) {
     if (state is SmsLoaded) {
       final current = (state as SmsLoaded);
-      final updatedList = current.items.map((item) {
-        item.isSelected = select;
-        return item;
-      }).toList();
+      final updatedList = current.items
+          .map((item) => item.copyWith(isSelected: select))
+          .toList();
       emit(SmsLoaded(items: updatedList, totalScanned: current.totalScanned));
     }
   }
@@ -80,7 +91,9 @@ class SmsCubit extends Cubit<SmsState> {
     if (state is SmsLoaded) {
       final current = (state as SmsLoaded);
       final updatedList = List<SmsCandidateItem>.from(current.items);
-      updatedList[index].targetWalletId = walletId;
+      updatedList[index] = updatedList[index].copyWith(
+        targetWalletId: walletId,
+      );
       emit(SmsLoaded(items: updatedList, totalScanned: current.totalScanned));
     }
   }
@@ -96,6 +109,7 @@ class SmsCubit extends Cubit<SmsState> {
     emit(SmsImporting());
 
     int count = 0;
+    final List<SmsCandidateItem> importedItems = [];
     try {
       final wRepo = walletRepository ?? WalletRepository();
 
@@ -105,6 +119,7 @@ class SmsCubit extends Cubit<SmsState> {
       for (final item in selectedItems) {
         final walletId = item.targetWalletId;
         if (walletId == null) continue;
+        importedItems.add(item);
 
         if (item.data.isBalanceOnly) {
           if (!transactionRepository.isDuplicateSms(
@@ -167,11 +182,24 @@ class SmsCubit extends Cubit<SmsState> {
         }
       }
 
-      // 2. Reconcile wallets with their latest verified bank statement balances
-      await smsService.reconcileWalletsWithLatestSms(
-        transactionRepository: transactionRepository,
-        walletRepository: wRepo,
-      );
+      // 2. Apply the newest authoritative balance imported for each wallet.
+      final Map<String, SmsCandidateItem> latestStatementByWallet = {};
+      for (final item in importedItems) {
+        final walletId = item.targetWalletId;
+        if (walletId == null || item.data.balance == null) continue;
+        final previous = latestStatementByWallet[walletId];
+        if (previous == null || item.data.date.isAfter(previous.data.date)) {
+          latestStatementByWallet[walletId] = item;
+        }
+      }
+      for (final entry in latestStatementByWallet.entries) {
+        await smsService.alignWalletToStatementBalance(
+          data: entry.value.data,
+          walletId: entry.key,
+          transactionRepository: transactionRepository,
+          walletRepository: wRepo,
+        );
+      }
 
       emit(SmsImportSuccess(count));
       return count;
@@ -189,9 +217,7 @@ class SmsCubit extends Cubit<SmsState> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final uid = DatabaseService.currentUserId ?? 'guest';
-      final autoImport = prefs.getBool('${uid}_smsAutoImportEnabled') ??
-          prefs.getBool('smsAutoImportEnabled') ??
-          true;
+      final autoImport = SmsService.isAutoImportEnabled(prefs, uid: uid);
       if (!autoImport) return 0;
 
       final hasPerm = await smsService.hasPermission();
@@ -214,6 +240,7 @@ class SmsCubit extends Cubit<SmsState> {
       for (final item in sortedItems) {
         final walletId = item.targetWalletId;
         if (walletId == null) continue;
+        importedItems.add(item);
 
         if (item.data.isBalanceOnly) {
           if (!transactionRepository.isDuplicateSms(
@@ -241,7 +268,6 @@ class SmsCubit extends Cubit<SmsState> {
             );
             await transactionRepository.saveTransaction(tx);
           }
-          importedItems.add(item);
           count++;
         } else {
           // Check for duplicates before saving
@@ -273,21 +299,34 @@ class SmsCubit extends Cubit<SmsState> {
           );
 
           await transactionRepository.saveTransaction(tx);
-          importedItems.add(item);
           count++;
         }
       }
 
-      // 2. Reconcile wallets with their latest verified bank statement balances
-      await smsService.reconcileWalletsWithLatestSms(
-        transactionRepository: transactionRepository,
-        walletRepository: wRepo,
-      );
+      // 2. Apply the newest authoritative balance imported for each wallet.
+      final Map<String, SmsCandidateItem> latestStatementByWallet = {};
+      for (final item in importedItems) {
+        final walletId = item.targetWalletId;
+        if (walletId == null || item.data.balance == null) continue;
+        final previous = latestStatementByWallet[walletId];
+        if (previous == null || item.data.date.isAfter(previous.data.date)) {
+          latestStatementByWallet[walletId] = item;
+        }
+      }
+      for (final entry in latestStatementByWallet.entries) {
+        await smsService.alignWalletToStatementBalance(
+          data: entry.value.data,
+          walletId: entry.key,
+          transactionRepository: transactionRepository,
+          walletRepository: wRepo,
+        );
+      }
 
       if (count > 0) {
         final prefs = await SharedPreferences.getInstance();
         final uid = DatabaseService.currentUserId ?? 'guest';
-        final notifEnabled = prefs.getBool('${uid}_smsNotificationsEnabled') ??
+        final notifEnabled =
+            prefs.getBool('${uid}_smsNotificationsEnabled') ??
             prefs.getBool('smsNotificationsEnabled') ??
             true;
 
@@ -308,7 +347,8 @@ class SmsCubit extends Cubit<SmsState> {
           } else {
             await notif.showTransactionAlert(
               title: '📥 حركات جديدة في المحافظ',
-              body: 'تم استيراد $count حركات مالية وتحديث أرصدة محافظك تلقائياً.',
+              body:
+                  'تم استيراد $count حركات مالية وتحديث أرصدة محافظك تلقائياً.',
             );
           }
         }

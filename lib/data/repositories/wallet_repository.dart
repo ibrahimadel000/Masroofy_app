@@ -14,13 +14,14 @@ class WalletRepository {
     Box<Wallet>? box,
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
-  })  : _customBox = box,
-        _customFirestore = firestore,
-        _customAuth = auth;
+  }) : _customBox = box,
+       _customFirestore = firestore,
+       _customAuth = auth;
 
   Box<Wallet>? get _safeBox {
     try {
-      return _customBox ?? (DatabaseService.isInitialized ? DatabaseService.walletsBox : null);
+      return _customBox ??
+          (DatabaseService.isInitialized ? DatabaseService.walletsBox : null);
     } catch (_) {
       return null;
     }
@@ -148,7 +149,13 @@ class WalletRepository {
 
       for (final doc in snapshot.docs) {
         final wallet = Wallet.fromMap(doc.data());
-        await _box.put(wallet.id, wallet);
+        // Hive is the local source of truth. Never overwrite a locally
+        // reconciled wallet with an older Firestore snapshot during startup.
+        // Firestore is used here to fill wallets that do not exist locally
+        // yet (for example after installing on a second device).
+        if (!_box.containsKey(wallet.id)) {
+          await _box.put(wallet.id, wallet);
+        }
       }
     } catch (_) {
       // Offline fallback

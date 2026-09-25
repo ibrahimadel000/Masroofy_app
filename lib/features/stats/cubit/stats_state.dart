@@ -40,13 +40,21 @@ class StatsLoaded extends StatsState {
       result: result ?? this.result,
       timeframe: timeframe ?? this.timeframe,
       selectedMonth: selectedMonth ?? this.selectedMonth,
-      selectedWalletId: selectedWalletId != null ? selectedWalletId() : this.selectedWalletId,
+      selectedWalletId: selectedWalletId != null
+          ? selectedWalletId()
+          : this.selectedWalletId,
       activeType: activeType ?? this.activeType,
     );
   }
 
   @override
-  List<Object?> get props => [result, timeframe, selectedMonth, selectedWalletId, activeType];
+  List<Object?> get props => [
+    result,
+    timeframe,
+    selectedMonth,
+    selectedWalletId,
+    activeType,
+  ];
 }
 
 class StatsError extends StatsState {

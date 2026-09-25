@@ -74,7 +74,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final prefs = await SharedPreferences.getInstance();
       if (mounted) {
         setState(() {
-          _isGuideDismissed = prefs.getBool('dismissed_new_user_guide') ?? false;
+          _isGuideDismissed =
+              prefs.getBool('dismissed_new_user_guide') ?? false;
         });
       }
     } catch (_) {}
@@ -128,10 +129,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _checkConnectivity() async {
     if (Platform.environment.containsKey('FLUTTER_TEST')) return;
     try {
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 3));
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 3));
       if (mounted) {
-        setState(() => _isOffline = result.isEmpty || result[0].rawAddress.isEmpty);
+        setState(
+          () => _isOffline = result.isEmpty || result[0].rawAddress.isEmpty,
+        );
       }
     } catch (_) {
       if (mounted) {
@@ -146,13 +150,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     final hasPerm = await notif.hasPermission();
     if (!hasPerm) {
-      final requestedBefore = prefs.getBool('notificationPermissionRequested') ?? false;
+      final requestedBefore =
+          prefs.getBool('notificationPermissionRequested') ?? false;
       if (!requestedBefore) {
         await prefs.setBool('notificationPermissionRequested', true);
         final granted = await notif.requestPermission();
         if (granted) {
           final uid = DatabaseService.currentUserId ?? 'guest';
-          final reminder = prefs.getBool('${uid}_dailyReminderEnabled') ??
+          final reminder =
+              prefs.getBool('${uid}_dailyReminderEnabled') ??
               prefs.getBool('dailyReminderEnabled') ??
               true;
           if (reminder) {
@@ -163,7 +169,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } else {
       // Permission already granted / enabled (e.g. Android < 13 or user previously allowed)
       final uid = DatabaseService.currentUserId ?? 'guest';
-      final reminder = prefs.getBool('${uid}_dailyReminderEnabled') ??
+      final reminder =
+          prefs.getBool('${uid}_dailyReminderEnabled') ??
           prefs.getBool('dailyReminderEnabled') ??
           true;
       if (reminder) {
@@ -174,13 +181,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-
   Future<void> _triggerAutoImportIfEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     final uid = DatabaseService.currentUserId ?? 'guest';
-    final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
-        prefs.getBool('smsAutoImportEnabled') ??
-        true;
+    final autoImportEnabled = SmsService.isAutoImportEnabled(prefs, uid: uid);
 
     if (!autoImportEnabled) return;
 
@@ -202,12 +206,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     int importedCount = 0;
     if (mounted) {
       final walletsState = context.read<WalletsCubit>().state;
-      List<Wallet> wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+      List<Wallet> wallets = walletsState is WalletsLoaded
+          ? walletsState.wallets
+          : <Wallet>[];
       if (wallets.isEmpty) {
         wallets = WalletRepository().getWallets();
       }
       if (wallets.isNotEmpty) {
-        importedCount = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+        importedCount = await context.read<SmsCubit>().autoImportSilently(
+          wallets: wallets,
+        );
         if (importedCount > 0 && mounted) {
           context.read<TransactionsCubit>().loadTransactions();
           context.read<WalletsCubit>().loadWallets();
@@ -216,14 +224,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    // 3. Reconcile wallets with the latest bank SMS statement balance
-    final reconciled = await const SmsService().reconcileWalletsWithLatestSms(
-      transactionRepository: TransactionRepository(),
-      walletRepository: WalletRepository(),
-    );
-    if (reconciled > 0 && mounted) {
-      context.read<WalletsCubit>().loadWallets();
-      context.read<StatsCubit>().loadStats();
+    // 3. Reconcile only after this startup actually imported or removed
+    // SMS records. Re-running reconciliation on every app launch can rewrite
+    // openingBalance from an old statement and make the total jump even when
+    // no new financial movement occurred.
+    final shouldReconcile = flushed > 0 || importedCount > 0 || cleaned > 0;
+    if (shouldReconcile) {
+      final reconciled = await const SmsService().reconcileWalletsWithLatestSms(
+        transactionRepository: TransactionRepository(),
+        walletRepository: WalletRepository(),
+      );
+      if (reconciled > 0 && mounted) {
+        context.read<WalletsCubit>().loadWallets();
+        context.read<StatsCubit>().loadStats();
+      }
     }
 
     final totalNew = flushed + importedCount;
@@ -232,13 +246,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         SnackBar(
           backgroundColor: AppTheme.primaryColor,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           content: Row(
             children: [
               const Icon(Icons.mark_email_read_rounded, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('تم استيراد $totalNew حركات وتحديث الرصيد الإجمالي تلقائياً 📩'),
+                child: Text(
+                  'تم استيراد $totalNew حركات وتحديث الرصيد الإجمالي تلقائياً 📩',
+                ),
               ),
             ],
           ),
@@ -249,10 +267,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _runStartupDuplicateCleanupAndReconcile() async {
     final cleaned = await TransactionRepository().cleanDuplicateTransactions();
-    final reconciled = await const SmsService().reconcileWalletsWithLatestSms(
-      transactionRepository: TransactionRepository(),
-      walletRepository: WalletRepository(),
-    );
+    int reconciled = 0;
+    if (cleaned > 0) {
+      reconciled = await const SmsService().reconcileWalletsWithLatestSms(
+        transactionRepository: TransactionRepository(),
+        walletRepository: WalletRepository(),
+      );
+    }
     if ((cleaned > 0 || reconciled > 0) && mounted) {
       context.read<WalletsCubit>().loadWallets();
       context.read<TransactionsCubit>().loadTransactions();
@@ -267,7 +288,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.account_balance_wallet_rounded, color: AppTheme.primaryColor),
+            Icon(
+              Icons.account_balance_wallet_rounded,
+              color: AppTheme.primaryColor,
+            ),
             SizedBox(width: 8),
             Text(
               'ميزان',
@@ -278,7 +302,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         actions: [
           // Hints & User Guide Icon
           IconButton(
-            icon: const Icon(Icons.lightbulb_outline_rounded, color: AppTheme.primaryColor),
+            icon: const Icon(
+              Icons.lightbulb_outline_rounded,
+              color: AppTheme.primaryColor,
+            ),
             tooltip: 'دليل وتلميحات ميزان',
             onPressed: () => AppHintsModal.show(context),
           ),
@@ -290,7 +317,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 style: TextButton.styleFrom(
                   backgroundColor: Colors.blue.shade50,
                   foregroundColor: Colors.blue.shade800,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 icon: const Text('📩', style: TextStyle(fontSize: 14)),
                 label: const Text(
@@ -311,7 +340,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const AddTransactionScreen(),
+                  ),
                 );
               },
               icon: const Icon(Icons.add_rounded),
@@ -360,7 +391,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildOfflineBanner() {
     final authState = context.watch<AuthCubit>().state;
-    final isGuest = (authState is Authenticated && authState.isGuest) ||
+    final isGuest =
+        (authState is Authenticated && authState.isGuest) ||
         (DatabaseService.currentUserId == 'guest');
     if (isGuest || !_isOffline) return const SizedBox.shrink();
 
@@ -378,7 +410,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             SizedBox(width: 8),
             Text(
               'وضع أوفلاين — سيتم المزامنة لاحقاً',
-              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -431,25 +467,33 @@ class _HomeMainView extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<WalletsCubit, WalletsState>(
       builder: (context, walletsState) {
-        final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+        final wallets = walletsState is WalletsLoaded
+            ? walletsState.wallets
+            : <Wallet>[];
 
         return BlocBuilder<TransactionsCubit, TransactionsState>(
           builder: (context, txState) {
-            final transactions = txState is TransactionsLoaded ? txState.transactions : <TransactionModel>[];
+            final transactions = txState is TransactionsLoaded
+                ? txState.transactions
+                : <TransactionModel>[];
 
-            final totalsByCurrency = BalanceCalculator.calculateTotalsByCurrency(
-              wallets: wallets,
-              allTransactions: transactions,
+            final totalsByCurrency =
+                BalanceCalculator.calculateTotalsByCurrency(
+                  wallets: wallets,
+                  allTransactions: transactions,
+                );
+            final todaySpending = BalanceCalculator.calculateTodaySpending(
+              transactions,
             );
-            final todaySpending = BalanceCalculator.calculateTodaySpending(transactions);
 
             return RefreshIndicator(
               onRefresh: () async {
                 final prefs = await SharedPreferences.getInstance();
                 final uid = DatabaseService.currentUserId ?? 'guest';
-                final autoImportEnabled = prefs.getBool('${uid}_smsAutoImportEnabled') ??
-                    prefs.getBool('smsAutoImportEnabled') ??
-                    true;
+                final autoImportEnabled = SmsService.isAutoImportEnabled(
+                  prefs,
+                  uid: uid,
+                );
 
                 int flushed = 0;
                 int imported = 0;
@@ -461,11 +505,15 @@ class _HomeMainView extends StatelessWidget {
                   );
                   await TransactionRepository().cleanDuplicateTransactions();
                   if (Platform.isAndroid && context.mounted) {
-                    final wallets = context.read<WalletsCubit>().state is WalletsLoaded
-                        ? (context.read<WalletsCubit>().state as WalletsLoaded).wallets
+                    final wallets =
+                        context.read<WalletsCubit>().state is WalletsLoaded
+                        ? (context.read<WalletsCubit>().state as WalletsLoaded)
+                              .wallets
                         : <Wallet>[];
                     if (wallets.isNotEmpty) {
-                      imported = await context.read<SmsCubit>().autoImportSilently(wallets: wallets);
+                      imported = await context
+                          .read<SmsCubit>()
+                          .autoImportSilently(wallets: wallets);
                     }
                   }
                   await const SmsService().reconcileWalletsWithLatestSms(
@@ -484,15 +532,21 @@ class _HomeMainView extends StatelessWidget {
                       SnackBar(
                         backgroundColor: AppTheme.primaryColor,
                         behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        content: Text('تم استيراد $totalUpdated حركات وتحديث الرصيد الإجمالي ✅'),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        content: Text(
+                          'تم استيراد $totalUpdated حركات وتحديث الرصيد الإجمالي ✅',
+                        ),
                       ),
                     );
                   }
                 }
               },
               child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(parent: ClampingScrollPhysics()),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: ClampingScrollPhysics(),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 12.0),
                 child: ResponsiveConstraint(
                   maxWidth: 1050,
@@ -513,121 +567,151 @@ class _HomeMainView extends StatelessWidget {
                       // 1. Total Balance Card
                       _buildTotalBalanceCard(totalsByCurrency, todaySpending),
 
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                    // 2. Horizontal Wallets List Header
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              const Text(
-                                'محافظي',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  '${wallets.length}',
-                                  style: const TextStyle(
-                                    color: AppTheme.primaryColor,
+                      // 2. Horizontal Wallets List Header
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'محافظي',
+                                  style: TextStyle(
+                                    fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryColor.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${wallets.length}',
+                                    style: const TextStyle(
+                                      color: AppTheme.primaryColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const AddWalletScreen(),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.add_rounded, size: 18),
+                              label: const Text('إضافة محفظة'),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Horizontal Wallets Carousel
+                      _buildWalletsHorizontalList(
+                        context,
+                        wallets,
+                        transactions,
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      // 3. Recent Transactions Header
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'آخر الحركات المالية',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (transactions.isNotEmpty)
+                              TextButton.icon(
+                                onPressed: onNavigateToTransactions,
+                                icon: const Icon(
+                                  Icons.arrow_back_rounded,
+                                  size: 16,
+                                ),
+                                label: Text(
+                                  'عرض الكل (${transactions.length})',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                          TextButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const AddWalletScreen()),
-                              );
-                            },
-                            icon: const Icon(Icons.add_rounded, size: 18),
-                            label: const Text('إضافة محفظة'),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    // Horizontal Wallets Carousel
-                    _buildWalletsHorizontalList(context, wallets, transactions),
-
-                    const SizedBox(height: 28),
-
-                    // 3. Recent Transactions Header
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'آخر الحركات المالية',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          if (transactions.isNotEmpty)
-                            TextButton.icon(
-                              onPressed: onNavigateToTransactions,
-                              icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                              label: Text(
-                                'عرض الكل (${transactions.length})',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                            ),
-                        ],
+                      // Recent Transactions List
+                      _buildRecentTransactionsList(
+                        context,
+                        transactions,
+                        wallets,
                       ),
-                    ),
 
-                    const SizedBox(height: 12),
-
-                    // Recent Transactions List
-                    _buildRecentTransactionsList(context, transactions, wallets),
-
-                    const SizedBox(height: 80),
-                  ],
+                      const SizedBox(height: 80),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
+            );
           },
         );
       },
     );
   }
 
-  Widget _buildTotalBalanceCard(Map<String, double> totalsByCurrency, double todaySpending) {
+  Widget _buildTotalBalanceCard(
+    Map<String, double> totalsByCurrency,
+    double todaySpending,
+  ) {
     final entries = totalsByCurrency.entries.toList();
     final hasMultipleCurrencies = entries.length > 1;
 
     // Primary currency (YER if exists, else first)
     final primaryEntry = entries.firstWhere(
       (e) => e.key == 'YER',
-      orElse: () => entries.isNotEmpty ? entries.first : const MapEntry('YER', 0.0),
+      orElse: () =>
+          entries.isNotEmpty ? entries.first : const MapEntry('YER', 0.0),
     );
 
     // Other currencies
-    final otherEntries = entries.where((e) => e.key != primaryEntry.key).toList();
+    final otherEntries = entries
+        .where((e) => e.key != primaryEntry.key)
+        .toList();
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       padding: const EdgeInsets.all(22.0),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            AppTheme.primaryColor,
-            AppTheme.secondaryColor,
-          ],
+          colors: [AppTheme.primaryColor, AppTheme.secondaryColor],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -682,7 +766,10 @@ class _HomeMainView extends StatelessWidget {
               runSpacing: 6,
               children: otherEntries.map((e) {
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
@@ -709,7 +796,11 @@ class _HomeMainView extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.arrow_downward_rounded, color: Colors.white, size: 18),
+                const Icon(
+                  Icons.arrow_downward_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'مصروف اليوم: ${AppConstants.formatCurrency(todaySpending)}',
@@ -760,7 +851,9 @@ class _HomeMainView extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text('أضف محفظتك الأولى الآن'),
@@ -789,7 +882,10 @@ class _HomeMainView extends StatelessWidget {
               },
               child: Container(
                 width: context.isTablet ? 150 : 130,
-                margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: 6.0,
+                  vertical: 4.0,
+                ),
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: AppTheme.primaryColor.withValues(alpha: 0.4),
@@ -801,7 +897,11 @@ class _HomeMainView extends StatelessWidget {
                 child: const Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.add_circle_outline_rounded, color: AppTheme.primaryColor, size: 36),
+                    Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: AppTheme.primaryColor,
+                      size: 36,
+                    ),
                     SizedBox(height: 8),
                     Text(
                       'إضافة محفظة',
@@ -819,7 +919,9 @@ class _HomeMainView extends StatelessWidget {
 
           final wallet = wallets[index];
           final walletColor = Color(wallet.colorValue);
-          final walletTx = transactions.where((tx) => tx.walletId == wallet.id).toList();
+          final walletTx = transactions
+              .where((tx) => tx.walletId == wallet.id)
+              .toList();
           final balance = BalanceCalculator.calculateWalletBalance(
             openingBalance: wallet.openingBalance,
             transactions: walletTx,
@@ -836,7 +938,10 @@ class _HomeMainView extends StatelessWidget {
             },
             child: Container(
               width: context.isTablet ? 215 : 175,
-              margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+              margin: const EdgeInsets.symmetric(
+                horizontal: 6.0,
+                vertical: 4.0,
+              ),
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
                 color: walletColor,
@@ -862,10 +967,16 @@ class _HomeMainView extends StatelessWidget {
                         size: 24,
                       ),
                       GestureDetector(
-                        onTap: () => context.read<WalletsCubit>().toggleFavorite(wallet.id),
+                        onTap: () => context
+                            .read<WalletsCubit>()
+                            .toggleFavorite(wallet.id),
                         child: Icon(
-                          wallet.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
-                          color: wallet.isFavorite ? Colors.amber : Colors.white70,
+                          wallet.isFavorite
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
+                          color: wallet.isFavorite
+                              ? Colors.amber
+                              : Colors.white70,
                           size: 22,
                         ),
                       ),
@@ -886,7 +997,10 @@ class _HomeMainView extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        AppConstants.formatCurrency(balance, wallet.currencyCode),
+                        AppConstants.formatCurrency(
+                          balance,
+                          wallet.currencyCode,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -950,7 +1064,11 @@ class _HomeMainView extends StatelessWidget {
             Text(
               'سجّل حركاتك النقدية يدوياً أو استورد رسائل المحافظ البنكية بضغطة زر.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.4),
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 13,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 20),
             Row(
@@ -960,17 +1078,27 @@ class _HomeMainView extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AddTransactionScreen(),
+                        ),
                       );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('تسجيل حركة', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    label: const Text(
+                      'تسجيل حركة',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
                 if (Platform.isAndroid) ...[
@@ -983,11 +1111,19 @@ class _HomeMainView extends StatelessWidget {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.primaryColor,
                         side: const BorderSide(color: AppTheme.primaryColor),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
                       icon: const Icon(Icons.mark_email_read_rounded, size: 18),
-                      label: const Text('مزامنة SMS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      label: const Text(
+                        'مزامنة SMS',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -1010,9 +1146,9 @@ class _HomeMainView extends StatelessWidget {
           itemBuilder: (context, index) {
             final tx = recent[index];
             final wallet = wallets.cast<Wallet?>().firstWhere(
-                  (w) => w?.id == tx.walletId,
-                  orElse: () => null,
-                );
+              (w) => w?.id == tx.walletId,
+              orElse: () => null,
+            );
 
             final isIncome = tx.type == 'income';
             final isAdjustment = tx.type == 'adjustment';
@@ -1020,17 +1156,19 @@ class _HomeMainView extends StatelessWidget {
             final Color amountColor = isIncome
                 ? AppTheme.primaryColor
                 : isAdjustment
-                    ? Colors.blue.shade700
-                    : Colors.red.shade700;
+                ? Colors.blue.shade700
+                : Colors.red.shade700;
             final String prefix = isIncome
                 ? '+'
                 : isAdjustment
-                    ? (tx.amount >= 0 ? '+' : '')
-                    : '-';
+                ? (tx.amount >= 0 ? '+' : '')
+                : '-';
 
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 5.0),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: ListTile(
                 onTap: () => TransactionDetailSheet.show(context, tx),
                 leading: CircleAvatar(
@@ -1050,7 +1188,10 @@ class _HomeMainView extends StatelessWidget {
                     if (tx.source == 'sms') ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.blue.shade50,
                           borderRadius: BorderRadius.circular(6),
@@ -1099,7 +1240,9 @@ class _HomeMainView extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.primaryColor,
               side: const BorderSide(color: AppTheme.primaryColor),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
             icon: const Icon(Icons.receipt_long_rounded, size: 18),
@@ -1116,5 +1259,3 @@ class _HomeMainView extends StatelessWidget {
     );
   }
 }
-
-

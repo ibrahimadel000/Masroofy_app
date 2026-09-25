@@ -18,12 +18,15 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     // Firebase already initialized
   }
 
-  debugPrint('🔥 [FCM Background Message]: ID=${message.messageId}, data=${message.data}, notif=${message.notification?.title}');
+  debugPrint(
+    '🔥 [FCM Background Message]: ID=${message.messageId}, data=${message.data}, notif=${message.notification?.title}',
+  );
 
   // If this is a data-only message (or custom backend payload) and app is in background, show local notification
   if (message.notification == null && message.data.isNotEmpty) {
     final title = message.data['title']?.toString() ?? 'تنبيه ميزان';
-    final body = message.data['body']?.toString() ?? message.data['message']?.toString();
+    final body =
+        message.data['body']?.toString() ?? message.data['message']?.toString();
     if (body != null && body.isNotEmpty) {
       try {
         final notif = NotificationService();
@@ -63,10 +66,11 @@ class FcmService {
     return _instance;
   }
   FcmService._internal({FirebaseMessaging? messaging})
-      : _messagingInstance = messaging;
+    : _messagingInstance = messaging;
 
   FirebaseMessaging? _messagingInstance;
-  FirebaseMessaging get _messaging => _messagingInstance ??= FirebaseMessaging.instance;
+  FirebaseMessaging get _messaging =>
+      _messagingInstance ??= FirebaseMessaging.instance;
   bool _isInitialized = false;
   String? _cachedToken;
 
@@ -87,7 +91,9 @@ class FcmService {
     try {
       // 1. Register top-level background handler safely
       try {
-        FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+        FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        );
       } catch (e) {
         debugPrint('FcmService onBackgroundMessage registration note: $e');
       }
@@ -95,18 +101,22 @@ class FcmService {
       // 2. Request / verify notification permission (Mandatory for Android 13+ and iOS)
       try {
         final settings = await requestPermission();
-        debugPrint('FCM Authorization Status: ${settings?.authorizationStatus}');
+        debugPrint(
+          'FCM Authorization Status: ${settings?.authorizationStatus}',
+        );
       } catch (e) {
         debugPrint('FCM requestPermission note: $e');
       }
 
       // 3. Set foreground presentation options for Apple / heads-up
       try {
-        await _messaging.setForegroundNotificationPresentationOptions(
-          alert: true,
-          badge: true,
-          sound: true,
-        ).timeout(const Duration(seconds: 4));
+        await _messaging
+            .setForegroundNotificationPresentationOptions(
+              alert: true,
+              badge: true,
+              sound: true,
+            )
+            .timeout(const Duration(seconds: 4));
       } catch (_) {}
 
       // 4. Load locally cached token first so token is immediately available
@@ -135,7 +145,9 @@ class FcmService {
 
       // 8. Handle foreground messages
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('🔥 [FCM Foreground message received]: id=${message.messageId}, data=${message.data}, notif=${message.notification?.title}');
+        debugPrint(
+          '🔥 [FCM Foreground message received]: id=${message.messageId}, data=${message.data}, notif=${message.notification?.title}',
+        );
         _handleForegroundMessage(message);
       });
 
@@ -147,9 +159,13 @@ class FcmService {
 
       // 10. Check if the app was launched by tapping a notification (from terminated state)
       try {
-        final initialMessage = await _messaging.getInitialMessage().timeout(const Duration(seconds: 3));
+        final initialMessage = await _messaging.getInitialMessage().timeout(
+          const Duration(seconds: 3),
+        );
         if (initialMessage != null) {
-          debugPrint('FCM App opened from terminated state via message: ${initialMessage.data}');
+          debugPrint(
+            'FCM App opened from terminated state via message: ${initialMessage.data}',
+          );
           _handleNotificationTap(initialMessage);
         }
       } catch (_) {}
@@ -165,16 +181,20 @@ class FcmService {
   Future<NotificationSettings?> requestPermission() async {
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return null;
     try {
-      final settings = await _messaging.requestPermission(
-        alert: true,
-        announcement: false,
-        badge: true,
-        carPlay: false,
-        criticalAlert: false,
-        provisional: false,
-        sound: true,
-      ).timeout(const Duration(seconds: 6));
-      debugPrint('FCM Explicit Authorization Status: ${settings.authorizationStatus}');
+      final settings = await _messaging
+          .requestPermission(
+            alert: true,
+            announcement: false,
+            badge: true,
+            carPlay: false,
+            criticalAlert: false,
+            provisional: false,
+            sound: true,
+          )
+          .timeout(const Duration(seconds: 6));
+      debugPrint(
+        'FCM Explicit Authorization Status: ${settings.authorizationStatus}',
+      );
       return settings;
     } catch (e) {
       debugPrint('FCM requestPermission error: $e');
@@ -194,11 +214,15 @@ class FcmService {
   Future<void> _retrieveAndStoreToken() async {
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
-        final fetched = await _messaging.getToken().timeout(const Duration(seconds: 10));
+        final fetched = await _messaging.getToken().timeout(
+          const Duration(seconds: 10),
+        );
         if (fetched != null && fetched.isNotEmpty) {
           _cachedToken = fetched;
           debugPrint('====================================================');
-          debugPrint('🔥 [Mizaan FCM Device Token (Success - Attempt $attempt)]:');
+          debugPrint(
+            '🔥 [Mizaan FCM Device Token (Success - Attempt $attempt)]:',
+          );
           debugPrint(_cachedToken);
           debugPrint('====================================================');
           await _saveTokenLocally(_cachedToken!);
@@ -238,11 +262,15 @@ class FcmService {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'fcmToken': token,
-          'lastTokenUpdate': FieldValue.serverTimestamp(),
-          'platform': Platform.operatingSystem,
-        }, SetOptions(merge: true)).timeout(const Duration(seconds: 5));
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+              'fcmToken': token,
+              'lastTokenUpdate': FieldValue.serverTimestamp(),
+              'platform': Platform.operatingSystem,
+            }, SetOptions(merge: true))
+            .timeout(const Duration(seconds: 5));
         debugPrint('FCM token synced to Firestore for user: ${user.uid}');
       }
     } catch (e) {
@@ -256,14 +284,23 @@ class FcmService {
     if (message.data.isNotEmpty) {
       final action = message.data['action'];
       if (action == 'reload_templates') {
-        debugPrint('FCM: reloading custom SMS templates triggered by data payload...');
+        debugPrint(
+          'FCM: reloading custom SMS templates triggered by data payload...',
+        );
         SmsSenderRegistry.loadCustomTemplates();
       }
     }
 
     // Determine title & body from notification OR data payload
-    final title = message.notification?.title ?? message.data['title']?.toString() ?? 'تنبيه ميزان';
-    final body = message.notification?.body ?? message.data['body']?.toString() ?? message.data['message']?.toString() ?? '';
+    final title =
+        message.notification?.title ??
+        message.data['title']?.toString() ??
+        'تنبيه ميزان';
+    final body =
+        message.notification?.body ??
+        message.data['body']?.toString() ??
+        message.data['message']?.toString() ??
+        '';
 
     if (body.isNotEmpty || message.notification != null) {
       NotificationService().showRemoteNotification(
@@ -286,7 +323,9 @@ class FcmService {
   /// Subscribe to a specific FCM topic with timeout
   Future<void> subscribeToTopic(String topic) async {
     try {
-      await _messaging.subscribeToTopic(topic).timeout(const Duration(seconds: 8));
+      await _messaging
+          .subscribeToTopic(topic)
+          .timeout(const Duration(seconds: 8));
       debugPrint('Subscribed to FCM topic: $topic');
     } catch (e) {
       debugPrint('Error subscribing to FCM topic ($topic): $e');
@@ -296,7 +335,9 @@ class FcmService {
   /// Unsubscribe from a specific FCM topic with timeout
   Future<void> unsubscribeFromTopic(String topic) async {
     try {
-      await _messaging.unsubscribeFromTopic(topic).timeout(const Duration(seconds: 8));
+      await _messaging
+          .unsubscribeFromTopic(topic)
+          .timeout(const Duration(seconds: 8));
       debugPrint('Unsubscribed from FCM topic: $topic');
     } catch (e) {
       debugPrint('Error unsubscribing from FCM topic ($topic): $e');

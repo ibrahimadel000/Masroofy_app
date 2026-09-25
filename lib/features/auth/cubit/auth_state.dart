@@ -19,7 +19,11 @@ class Authenticated extends AuthState {
   final bool isFirstLogin;
   final bool isGuest;
 
-  const Authenticated(this.user, {this.isFirstLogin = false, this.isGuest = false});
+  const Authenticated(
+    this.user, {
+    this.isFirstLogin = false,
+    this.isGuest = false,
+  });
 
   @override
   List<Object?> get props => [user?.uid, isFirstLogin, isGuest];

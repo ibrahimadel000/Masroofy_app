@@ -30,34 +30,43 @@ class AuthCubit extends Cubit<AuthState> {
     return keyBiometricEnabled;
   }
 
-  bool get isBiometricEnabled {
-    return prefs.getBool(_biometricKey) ??
-        prefs.getBool(keyBiometricEnabled) ??
-        false;
+  bool get isBiometricEnabled => prefs.getBool(_biometricKey) ?? false;
+
+  bool get canQuickLoginWithBiometrics {
+    final user = authRepository.currentUser;
+    if (user == null) return false;
+    return prefs.getBool('${user.uid}_$keyBiometricEnabled') ?? false;
   }
 
   bool get isGuestLoggedIn => prefs.getBool(keyGuestLoggedIn) ?? false;
 
   Future<void> setBiometricEnabled(bool enabled) async {
     await prefs.setBool(_biometricKey, enabled);
-    await prefs.setBool(keyBiometricEnabled, enabled);
   }
 
   Future<void> checkAuthStatus() async {
     final user = authRepository.currentUser;
     if (user != null) {
-      await DatabaseService.switchUser(user.uid);
-      if (isBiometricEnabled) {
+      final biometricEnabledForUser = isBiometricEnabled;
+      if (biometricEnabledForUser) {
+        await DatabaseService.switchUser(user.uid);
         emit(BiometricRequired(user, isGuest: false));
       } else {
-        emit(Authenticated(user));
+        // Firebase persists sessions by default. Without an app lock, a cold
+        // start must require the password instead of silently reopening data.
+        await authRepository.signOut();
+        await DatabaseService.switchUser('guest');
+        emit(Unauthenticated());
       }
     } else if (isGuestLoggedIn) {
-      await DatabaseService.switchUser('guest');
       if (isBiometricEnabled) {
+        await DatabaseService.switchUser('guest');
         emit(const BiometricRequired(null, isGuest: true));
       } else {
-        emit(const Authenticated(null, isGuest: true));
+        // An unprotected local session must not survive an app restart.
+        await prefs.setBool(keyGuestLoggedIn, false);
+        await DatabaseService.switchUser('guest');
+        emit(Unauthenticated());
       }
     } else {
       await DatabaseService.switchUser('guest');
@@ -65,10 +74,7 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signIn({required String email, required String password}) async {
     emit(Authenticating());
     try {
       final credential = await authRepository.signIn(
@@ -122,17 +128,22 @@ class AuthCubit extends Cubit<AuthState> {
     emit(const Authenticated(null, isGuest: true));
   }
 
-  void lockSession() {
-    if (!isBiometricEnabled || state is BiometricRequired) return;
+  Future<void> lockSession() async {
+    if (state is BiometricRequired || state is Unauthenticated) return;
 
     final user = authRepository.currentUser;
     final guest = isGuestLoggedIn;
-
-    if (user != null) {
-      emit(BiometricRequired(user, isGuest: false));
-    } else if (guest) {
-      emit(const BiometricRequired(null, isGuest: true));
+    if (isBiometricEnabled) {
+      if (user != null) {
+        emit(BiometricRequired(user, isGuest: false));
+      } else if (guest) {
+        emit(const BiometricRequired(null, isGuest: true));
+      }
+      return;
     }
+
+    // No biometric lock means no persistent session after leaving the app.
+    await fullSignOut();
   }
 
   Future<BiometricAuthResult> authenticateWithBiometrics() async {
@@ -150,24 +161,36 @@ class AuthCubit extends Cubit<AuthState> {
         await DatabaseService.switchUser('guest');
         emit(const Authenticated(null, isGuest: true));
       } else {
-        await prefs.setBool(keyGuestLoggedIn, true);
-        await setBiometricEnabled(true);
-        emit(const Authenticated(null, isGuest: true));
+        // There is no active session to unlock. Biometrics are not a
+        // replacement for Firebase credentials after a real sign-out.
+        emit(Unauthenticated());
       }
     }
 
     return result;
   }
 
-  Future<void> sendPasswordReset(String email) async {
+  Future<bool> sendPasswordReset(String email) async {
     try {
-      await authRepository.sendPasswordResetEmail(email);
+      await authRepository.sendPasswordResetEmail(email.trim().toLowerCase());
+      return true;
     } catch (e) {
       emit(AuthError(e.toString()));
+      return false;
     }
   }
 
+  /// Locks the UI while retaining the Firebase session for biometric quick login.
+  /// If biometrics are disabled, this becomes a full sign-out.
   Future<void> signOut() async {
+    if (canQuickLoginWithBiometrics) {
+      emit(Unauthenticated());
+      return;
+    }
+    await fullSignOut();
+  }
+
+  Future<void> fullSignOut() async {
     emit(Authenticating());
     await prefs.setBool(keyGuestLoggedIn, false);
     await authRepository.signOut();

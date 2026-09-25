@@ -2,396 +2,366 @@ import 'package:flutter/material.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
 import 'package:mizaan/core/utils/responsive.dart';
 
-class AppHintsModal extends StatelessWidget {
+class AppHintsModal extends StatefulWidget {
   const AppHintsModal({super.key});
 
   static Future<void> show(BuildContext context) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const AppHintsModal(),
     );
   }
 
   @override
+  State<AppHintsModal> createState() => _AppHintsModalState();
+}
+
+class _AppHintsModalState extends State<AppHintsModal> {
+  final PageController _controller = PageController();
+  int _page = 0;
+
+  static const _steps = <_GuidePageData>[
+    _GuidePageData(
+      icon: Icons.waving_hand_rounded,
+      color: AppTheme.primaryColor,
+      eyebrow: 'مرحباً بك في ميزان',
+      title: 'جولة قصيرة تضبط التطبيق بطريقة صحيحة',
+      description:
+          'خلال خمس خطوات ستعرف كيف تربط محافظك، تفعل رسائل SMS، وتراجع الحركات قبل حفظها.',
+      notice: 'لن تظهر أي ميزة كمفعلة إلا بعد منح صلاحيتها فعلياً.',
+      bullets: [
+        'إعداد واضح خطوة بخطوة',
+        'حالة حقيقية لكل صلاحية',
+        'يمكنك إعادة هذه الجولة من الإعدادات',
+      ],
+    ),
+    _GuidePageData(
+      icon: Icons.account_balance_wallet_rounded,
+      color: Colors.teal,
+      eyebrow: 'الخطوة الأولى',
+      title: 'أضف محافظك بأسمائها الصحيحة',
+      description:
+          'أنشئ محفظة لكل حساب مالي تستخدمه، مثل الكريمي أو جيب أو ون كاش، حتى يربط ميزان كل رسالة بالمحفظة الصحيحة.',
+      notice: 'لا يخمّن التطبيق وجهة الحركة المالية إذا لم يجد محفظة مطابقة.',
+      bullets: [
+        'اختر نوع المحفظة الصحيح',
+        'حدد العملة بدقة',
+        'يمكنك إضافة أكثر من محفظة',
+      ],
+    ),
+    _GuidePageData(
+      icon: Icons.sms_rounded,
+      color: Colors.indigo,
+      eyebrow: 'الخطوة الثانية',
+      title: 'فعّل استقبال رسائل SMS',
+      description:
+          'من الإعدادات فعّل «استقبال وتسجيل رسائل SMS تلقائياً»، ثم وافق على نافذة صلاحية الرسائل التي يعرضها أندرويد.',
+      notice: 'يجب أن تظهر حالتا «الصلاحية ممنوحة» و«مزامنة الرسائل جاهزة».',
+      bullets: [
+        'الرسائل المالية تُحلل محلياً على الهاتف',
+        'الرسائل من المرسلين غير المدعومين تُتجاهل',
+        'يمكنك إيقاف التسجيل التلقائي في أي وقت',
+      ],
+    ),
+    _GuidePageData(
+      icon: Icons.manage_search_rounded,
+      color: Colors.deepOrange,
+      eyebrow: 'الخطوة الثالثة',
+      title: 'افحص الرسائل السابقة وراجعها',
+      description:
+          'استخدم «فحص الرسائل الآن» لاستيراد الحركات السابقة. راجع المبلغ والمحفظة المحددة قبل الضغط على الاستيراد.',
+      notice: 'منع التكرار يحميك عند إعادة الفحص أكثر من مرة.',
+      bullets: [
+        'حدد الحركات التي تريد استيرادها',
+        'غيّر المحفظة المستهدفة عند الحاجة',
+        'الرصيد الوارد في رسالة البنك يُعامل كمرجع موثوق',
+      ],
+    ),
+    _GuidePageData(
+      icon: Icons.verified_rounded,
+      color: Colors.green,
+      eyebrow: 'أصبحت جاهزاً',
+      title: 'راقب الحركات والرصيد تلقائياً',
+      description:
+          'عند وصول رسالة مالية جديدة يسجل ميزان الحركة ويحدث رصيد المحفظة. اسحب الشاشة الرئيسية للأسفل لإجراء فحص إضافي.',
+      notice:
+          'إذا لم تُسجل رسالة، راجع حالة SMS في الإعدادات ثم استخدم «فحص الرسائل الآن».',
+      bullets: [
+        'التسجيل التلقائي للحركات الجديدة',
+        'تحديث الرصيد من بيان البنك',
+        'إشعارات خاصة بدون عرض نص الرسالة',
+      ],
+    ),
+  ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _next() async {
+    if (_page == _steps.length - 1) {
+      Navigator.maybePop(context);
+      return;
+    }
+    await _controller.nextPage(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Future<void> _previous() async {
+    if (_page == 0) return;
+    await _controller.previousPage(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF1B202B) : Colors.white;
+    final background = isDark ? const Color(0xFF171C27) : Colors.white;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
-                blurRadius: 25,
-                offset: const Offset(0, -6),
-              ),
-            ],
-          ),
+    return FractionallySizedBox(
+      heightFactor: 0.92,
+      child: Container(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
           child: Column(
             children: [
-              // Grab handle
-              Padding(
-                padding: const EdgeInsets.only(top: 14, bottom: 8),
-                child: Container(
-                  width: 44,
-                  height: 4.5,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2.5),
-                  ),
+              const SizedBox(height: 12),
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
-
-              // Title Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.lightbulb_outline_rounded,
-                        color: AppTheme.primaryColor,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'دليل وتلميحات ميزان',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                          Text(
-                            'كل ما تحتاج لمعرفته لتحقيق أقصى استفادة من التطبيق',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        'دليل ميزان التفاعلي',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
+                    Text(
+                      '${_page + 1} من ${_steps.length}',
+                      style: const TextStyle(
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     IconButton(
+                      tooltip: 'إغلاق',
+                      onPressed: () => Navigator.maybePop(context),
                       icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
-              const Divider(height: 1),
-
-              // Content List
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: (_page + 1) / _steps.length,
+                    minHeight: 6,
+                    backgroundColor: isDark
+                        ? Colors.white12
+                        : Colors.grey.shade200,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               Expanded(
                 child: ResponsiveConstraint(
                   maxWidth: 650,
-                  alignment: Alignment.topCenter,
-                  child: ListView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(20.0),
-                    children: [
-                      _buildHintSection(
-                        icon: Icons.auto_awesome_rounded,
-                        iconColor: AppTheme.primaryColor,
-                        title: 'كيف يعمل ميزان مع الرسائل البنكية؟',
-                        isDark: isDark,
-                        children: const [
-                          _HintItem(
-                            number: '1',
-                            title: 'الرصد الفوري للإشعارات',
-                            content:
-                                'عند وصول رسالة SMS من بنكك أو محفظتك (مثل الكريمي، جيب، ون كاش، فلوسك، محفظتي)، يحلل التطبيق نص الرسالة في أجزاء من الثانية.',
-                          ),
-                          _HintItem(
-                            number: '2',
-                            title: 'استخراج وتصنيف البيانات بدقة',
-                            content:
-                                'يتعرف المحرك الذكي على: نوع الحركة (خصم، إيداع، حوالة، شراء)، المبلغ، المحفظة المطابقة، الرصيد المتبقي بعد العملية.',
-                          ),
-                          _HintItem(
-                            number: '3',
-                            title: 'تحديث الرصيد والتنبيه الفوري',
-                            content:
-                                'يتم تحديث رصيد المحفظة وإجمالي ثروتك فوراً، وتصلك بطاقة إشعار جميلة بتفاصيل المعاملة دون أن تفتح التطبيق.',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildHintSection(
-                        icon: Icons.security_rounded,
-                        iconColor: Colors.blue.shade700,
-                        title: 'الخصوصية والأمان أولاً 🔒',
-                        isDark: isDark,
-                        children: const [
-                          _HintItem(
-                            number: '•',
-                            title: 'معالجة محلية 100% بدون إنترنت',
-                            content:
-                                'جميع الرسائل يتم تحليلها محلياً على معالج هاتفك. لا يتم رفع أي رسالة أو رقم حساب لأي خادم سحابي إطلاقاً.',
-                          ),
-                          _HintItem(
-                            number: '•',
-                            title: 'حماية كاملة للرسائل الشخصية',
-                            content:
-                                'الفلتر الذكي يتجاهل أي رسالة لا تنتمي لأسماء مرسلي البنوك والمحافظ المالية المعتمدة، فرسائلك ومحادثاتك في أمان تام.',
-                          ),
-                          _HintItem(
-                            number: '•',
-                            title: 'قفل بالتطبيق وبصمة الإصبع',
-                            content:
-                                'يمكنك تفعيل القفل البيومتري (بصمة الإصبع / الوجه) من شاشة الإعدادات لمنع أي شخص من فتح ميزان.',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildHintSection(
-                        icon: Icons.battery_charging_full_rounded,
-                        iconColor: Colors.orange.shade800,
-                        title: 'العمل في الخلفية وإعدادات الهواتف ⚡',
-                        isDark: isDark,
-                        children: const [
-                          _HintItem(
-                            number: '•',
-                            title: 'لماذا يطلب التطبيق إعفاء البطارية؟',
-                            content:
-                                'أنظمة أندرويد الحديثة تقوم بإيقاف التطبيقات عند قفل الشاشة لتوفير الطاقة. إعفاء التطبيق يضمن تسجيل حركاتك أولاً بأول دون تأخير.',
-                          ),
-                          _HintItem(
-                            number: '•',
-                            title: 'استهلاك الطاقة شبه منعدم',
-                            content:
-                                'ميزان مبرمج بتقنية الحدث (Event-Driven)، أي أنه ينام تماماً ولا يستيقظ إلا في اللحظة التي تصل فيها الرسالة.',
-                          ),
-                          _HintItem(
-                            number: '•',
-                            title: 'أجهزة شاومي، هواوي، وسامسونج',
-                            content:
-                                'إذا لاحظت عدم تسجيل الرسائل فوراً، تأكد من تفعيل "التشغيل التلقائي / Autostart" وضبط توفير البطارية على "بلا قيود" في إعدادات جهازك.',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildHintSection(
-                        icon: Icons.account_balance_wallet_rounded,
-                        iconColor: Colors.teal.shade700,
-                        title: 'إدارة المحافظ والعملات 💱',
-                        isDark: isDark,
-                        children: const [
-                          _HintItem(
-                            number: '•',
-                            title: 'تطابق المحافظ مع الرسائل',
-                            content:
-                                'عند إضافة محفظة جديدة، اختر اسمها بدقة (مثلاً: "الكريمي" أو "ون كاش")؛ ميزان يربط الرسائل تلقائياً بالمحفظة الأكثر تطابقاً.',
-                          ),
-                          _HintItem(
-                            number: '•',
-                            title: 'دعم العملات المتعددة',
-                            content:
-                                'يدعم ميزان العملات الرئيسية (الريال اليمني، الريال السعودي، الدولار الأمريكي) ويعرض إجمالي كل عملة بشكل منفصل في الشاشة الرئيسية.',
-                          ),
-                          _HintItem(
-                            number: '•',
-                            title: 'تسجيل المصاريف النقدية (الكاش)',
-                            content:
-                                'للمصاريف اليومية التي تدفعها نقداً في البقالة أو التاكسي، اضغط على زر "➕ حركة" وسجلها في ثوانٍ مع اختيار التصنيف المناسب.',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      _buildHintSection(
-                        icon: Icons.sync_rounded,
-                        iconColor: Colors.indigo.shade600,
-                        title: 'مزامنة الرسائل القديمة 📥',
-                        isDark: isDark,
-                        children: const [
-                          _HintItem(
-                            number: '•',
-                            title: 'استيراد الحركات السابقة بضغطة زر',
-                            content:
-                                'هل قمت بتثبيت التطبيق للتو؟ يمكنك الذهاب لشاشة "مزامنة الرسائل" لفحص صندوق الوارد واستيراد جميع رسائل البنوك السابقة تلقائياً.',
-                          ),
-                          _HintItem(
-                            number: '•',
-                            title: 'منع التكرار الذكي',
-                            content:
-                                'ميزان يمتلك بصمة فريدة لكل رسالة، مما يضمن عدم تكرار أي معاملة حتى إذا قمت بالمزامنة عدة مرات.',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Bottom OK Button
-                      ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          'فهمت، حسناً 👍',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: _steps.length,
+                    onPageChanged: (value) => setState(() => _page = value),
+                    itemBuilder: (context, index) =>
+                        _GuidePage(data: _steps[index], isDark: isDark),
                   ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                child: Row(
+                  children: [
+                    if (_page > 0)
+                      OutlinedButton.icon(
+                        onPressed: _previous,
+                        icon: const Icon(Icons.arrow_forward_rounded),
+                        label: const Text('السابق'),
+                      )
+                    else
+                      TextButton(
+                        onPressed: () => Navigator.maybePop(context),
+                        child: const Text('تخطي'),
+                      ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: _next,
+                      icon: Icon(
+                        _page == _steps.length - 1
+                            ? Icons.check_rounded
+                            : Icons.arrow_back_rounded,
+                      ),
+                      label: Text(
+                        _page == _steps.length - 1 ? 'إنهاء الجولة' : 'التالي',
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildHintSection({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required List<Widget> children,
-    required bool isDark,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? Colors.white12 : Colors.grey.shade200,
         ),
       ),
-      padding: const EdgeInsets.all(16.0),
+    );
+  }
+}
+
+class _GuidePage extends StatelessWidget {
+  final _GuidePageData data;
+  final bool isDark;
+
+  const _GuidePage({required this.data, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(22),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 12),
+          Container(
+            width: 104,
+            height: 104,
+            decoration: BoxDecoration(
+              color: data.color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(data.icon, color: data.color, size: 52),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            data.eyebrow,
+            style: TextStyle(
+              color: data.color,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            data.title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 22,
+              height: 1.35,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 12),
-          ...children,
+          Text(
+            data.description,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.7,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: data.color.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: data.color.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.tips_and_updates_rounded, color: data.color),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    data.notice,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...data.bullets.map(
+            (text) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: data.color, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(text, style: const TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _HintItem extends StatelessWidget {
-  final String number;
+class _GuidePageData {
+  final IconData icon;
+  final Color color;
+  final String eyebrow;
   final String title;
-  final String content;
+  final String description;
+  final String notice;
+  final List<String> bullets;
 
-  const _HintItem({
-    required this.number,
+  const _GuidePageData({
+    required this.icon,
+    required this.color,
+    required this.eyebrow,
     required this.title,
-    required this.content,
+    required this.description,
+    required this.notice,
+    required this.bullets,
   });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              number,
-              style: const TextStyle(
-                color: AppTheme.primaryColor,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  content,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                    height: 1.4,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

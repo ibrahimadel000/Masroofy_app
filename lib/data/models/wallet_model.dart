@@ -112,14 +112,14 @@ class Wallet extends HiveObject {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        name,
-        type,
-        colorValue,
-        iconCodePoint,
-        openingBalance,
-        isFavorite,
-        currencyCode,
-        createdAt,
-      );
+    id,
+    name,
+    type,
+    colorValue,
+    iconCodePoint,
+    openingBalance,
+    isFavorite,
+    currencyCode,
+    createdAt,
+  );
 }

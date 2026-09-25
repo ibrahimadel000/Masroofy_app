@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
 import 'package:mizaan/data/models/wallet_model.dart';
 import 'package:mizaan/data/repositories/wallet_repository.dart';
+import 'package:mizaan/data/repositories/transaction_repository.dart';
 
 abstract class WalletsState extends Equatable {
   const WalletsState();
@@ -35,9 +36,13 @@ class WalletsError extends WalletsState {
 
 class WalletsCubit extends Cubit<WalletsState> {
   final WalletRepository repository;
+  final TransactionRepository transactionRepository;
 
-  WalletsCubit({required this.repository})
-      : super(WalletsInitial()) {
+  WalletsCubit({
+    required this.repository,
+    TransactionRepository? transactionRepository,
+  }) : transactionRepository = transactionRepository ?? TransactionRepository(),
+       super(WalletsInitial()) {
     loadWallets();
   }
 
@@ -92,6 +97,7 @@ class WalletsCubit extends Cubit<WalletsState> {
 
   Future<void> deleteWallet(String id) async {
     try {
+      await transactionRepository.deleteTransactionsForWallet(id);
       await repository.deleteWallet(id);
       loadWallets();
     } catch (e) {

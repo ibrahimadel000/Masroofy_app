@@ -107,7 +107,8 @@ class TransactionsCubit extends Cubit<TransactionsState> {
     try {
       final sp = prefs ?? await SharedPreferences.getInstance();
       final uid = DatabaseService.currentUserId ?? 'guest';
-      final notifyManual = sp.getBool('${uid}_manualTxNotificationsEnabled') ??
+      final notifyManual =
+          sp.getBool('${uid}_manualTxNotificationsEnabled') ??
           sp.getBool('manualTxNotificationsEnabled') ??
           true;
 
@@ -152,7 +153,8 @@ class TransactionsCubit extends Cubit<TransactionsState> {
         );
         final sp = prefs ?? await SharedPreferences.getInstance();
         final uid = DatabaseService.currentUserId ?? 'guest';
-        final threshold = sp.getDouble('${uid}_lowBalanceThreshold') ??
+        final threshold =
+            sp.getDouble('${uid}_lowBalanceThreshold') ??
             sp.getDouble('lowBalanceThreshold') ??
             10000.0;
         if (currentBal < threshold) {

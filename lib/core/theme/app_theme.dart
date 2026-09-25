@@ -36,9 +36,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: lightSurface,
         elevation: 1,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       datePickerTheme: DatePickerThemeData(
         backgroundColor: lightSurface,
@@ -96,9 +94,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: darkSurface,
         elevation: 1,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       datePickerTheme: DatePickerThemeData(
         backgroundColor: darkSurface,

@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mizaan/core/router/app_router.dart';
 import 'package:mizaan/core/theme/app_theme.dart';
+import 'package:mizaan/data/services/database_service.dart';
 import 'package:mizaan/data/services/sms_service.dart';
 import 'package:mizaan/features/home/widgets/app_hints_modal.dart';
 import 'package:mizaan/features/onboarding/widgets/permission_education_sheet.dart';
@@ -28,7 +28,9 @@ class NewUserHintsCard extends StatefulWidget {
 class _NewUserHintsCardState extends State<NewUserHintsCard> {
   bool _isCollapsed = false;
   bool _hasSmsPermission = false;
-  bool _isBatteryOptimized = false;
+  bool _autoImportEnabled = false;
+  bool _initialScanCompleted = false;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -37,38 +39,64 @@ class _NewUserHintsCardState extends State<NewUserHintsCard> {
   }
 
   Future<void> _checkStatuses() async {
-    if (!Platform.isAndroid) {
-      if (mounted) {
-        setState(() {
-          _hasSmsPermission = true;
-          _isBatteryOptimized = true;
-        });
-      }
-      return;
-    }
-
+    if (!Platform.isAndroid) return;
     try {
-      final sms = await const SmsService().hasPermission();
-      final batt = await Permission.ignoreBatteryOptimizations.isGranted;
-
+      final prefs = await SharedPreferences.getInstance();
+      final uid = DatabaseService.currentUserId ?? 'guest';
+      final permission = await const SmsService().hasPermission();
+      final enabled = SmsService.isAutoImportEnabled(prefs, uid: uid);
+      final scanned = prefs.getBool('${uid}_smsInitialScanCompleted') ?? false;
       if (mounted) {
         setState(() {
-          _hasSmsPermission = sms;
-          _isBatteryOptimized = batt;
+          _hasSmsPermission = permission;
+          _autoImportEnabled = permission && enabled;
+          _initialScanCompleted = scanned;
         });
       }
     } catch (_) {}
   }
 
+  Future<void> _enableAutomaticSync() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      var granted = _hasSmsPermission;
+      if (!granted) {
+        granted = await PermissionEducationSheet.show(
+          context,
+          type: PermissionEducationType.sms,
+        );
+      }
+      if (!granted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final uid = DatabaseService.currentUserId ?? 'guest';
+      await SmsService.setAutoImportEnabled(prefs, uid: uid, value: true);
+      await _checkStatuses();
+      widget.onPermissionUpdated?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('مزامنة SMS أصبحت جاهزة لتسجيل الحركات تلقائياً'),
+            backgroundColor: AppTheme.primaryColor,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   int get _completedStepsCount {
-    int count = 0;
+    var count = 0;
     if (_hasSmsPermission) count++;
-    if (_isBatteryOptimized) count++;
+    if (_autoImportEnabled) count++;
     if (widget.walletCount > 0) count++;
+    if (_initialScanCompleted) count++;
     return count;
   }
 
-  int get _totalSteps => 4;
+  static const int _totalSteps = 4;
 
   @override
   Widget build(BuildContext context) {
@@ -76,43 +104,40 @@ class _NewUserHintsCardState extends State<NewUserHintsCard> {
     final progress = _completedStepsCount / _totalSteps;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E2433) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: isDark ? AppTheme.primaryColor.withValues(alpha: 0.3) : Colors.blue.shade100,
-          width: 1.5,
+          color: AppTheme.primaryColor.withValues(alpha: 0.25),
+          width: 1.4,
         ),
         boxShadow: [
           BoxShadow(
-            color: (isDark ? Colors.black : Colors.blue.shade900).withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 18,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Bar
           InkWell(
             onTap: () => setState(() => _isCollapsed = !_isCollapsed),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(22),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(9),
                     decoration: BoxDecoration(
                       color: AppTheme.primaryColor.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
-                      Icons.rocket_launch_rounded,
+                      Icons.assistant_rounded,
                       color: AppTheme.primaryColor,
-                      size: 22,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -122,204 +147,136 @@ class _NewUserHintsCardState extends State<NewUserHintsCard> {
                       children: [
                         Row(
                           children: [
-                            const Text(
-                              'دليل البداية السريعة',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: progress == 1.0
-                                    ? Colors.green.withValues(alpha: 0.15)
-                                    : AppTheme.primaryColor.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                            const Expanded(
                               child: Text(
-                                progress == 1.0 ? 'مكتمل 🎉' : '$_completedStepsCount من $_totalSteps',
+                                'دليل البداية السريعة',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: progress == 1.0 ? Colors.green.shade700 : AppTheme.primaryColor,
                                   fontFamily: 'Cairo',
                                 ),
                               ),
                             ),
+                            Text(
+                              progress == 1
+                                  ? 'مكتمل'
+                                  : '$_completedStepsCount/$_totalSteps',
+                              style: TextStyle(
+                                color: progress == 1
+                                    ? Colors.green
+                                    : AppTheme.primaryColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        // Mini progress bar
+                        const SizedBox(height: 7),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(5),
                           child: LinearProgressIndicator(
                             value: progress,
-                            minHeight: 4,
-                            backgroundColor: isDark ? Colors.white12 : Colors.grey.shade200,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              progress == 1.0 ? Colors.green : AppTheme.primaryColor,
-                            ),
+                            minHeight: 5,
+                            backgroundColor: isDark
+                                ? Colors.white12
+                                : Colors.grey.shade200,
+                            color: progress == 1
+                                ? Colors.green
+                                : AppTheme.primaryColor,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      _isCollapsed ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
-                      color: Colors.grey,
-                    ),
-                    onPressed: () => setState(() => _isCollapsed = !_isCollapsed),
-                    tooltip: _isCollapsed ? 'توسيع' : 'طي',
+                  const SizedBox(width: 8),
+                  Icon(
+                    _isCollapsed
+                        ? Icons.keyboard_arrow_down_rounded
+                        : Icons.keyboard_arrow_up_rounded,
                   ),
                 ],
               ),
             ),
           ),
-
           if (!_isCollapsed) ...[
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Step 1: SMS Permission
-                  _buildStepItem(
-                    isCompleted: _hasSmsPermission,
-                    icon: Icons.mark_email_read_rounded,
-                    title: 'تفعيل القراءة الذكية للرسائل',
-                    subtitle: 'يتعرف ميزان تلقائياً على إشعارات البنوك لتسجيل حركاتك ومصاريفك فوراً.',
-                    actionLabel: 'تفعيل الآن 🔒',
-                    onAction: () async {
-                      final granted = await PermissionEducationSheet.show(
-                        context,
-                        type: PermissionEducationType.sms,
-                      );
-                      if (granted && mounted) {
-                        await _checkStatuses();
-                        widget.onPermissionUpdated?.call();
-                      }
-                    },
-                    isDark: isDark,
+                  _GuideNotice(ready: _autoImportEnabled),
+                  const SizedBox(height: 14),
+                  _GuideStep(
+                    number: 1,
+                    completed: _hasSmsPermission,
+                    icon: Icons.shield_outlined,
+                    title: 'منح صلاحية رسائل SMS',
+                    subtitle:
+                        'الصلاحية مطلوبة لقراءة رسائل المحافظ المالية فقط على جهازك.',
+                    actionLabel: 'منح الصلاحية',
+                    busy: _busy,
+                    onAction: _enableAutomaticSync,
                   ),
-                  const SizedBox(height: 12),
-
-                  // Step 2: Battery Optimization
-                  _buildStepItem(
-                    isCompleted: _isBatteryOptimized,
-                    icon: Icons.battery_charging_full_rounded,
-                    title: 'السماح بالعمل في الخلفية',
-                    subtitle: 'يضمن استلام الرسائل وتحديث رصيد محافظك فوراً دون تأخير (استهلاك 0%).',
-                    actionLabel: 'تفعيل ⚡',
-                    onAction: () async {
-                      final granted = await PermissionEducationSheet.show(
-                        context,
-                        type: PermissionEducationType.battery,
-                      );
-                      if (granted && mounted) {
-                        await _checkStatuses();
-                        widget.onPermissionUpdated?.call();
-                      }
-                    },
-                    isDark: isDark,
+                  const SizedBox(height: 10),
+                  _GuideStep(
+                    number: 2,
+                    completed: _autoImportEnabled,
+                    icon: Icons.sync_lock_rounded,
+                    title: 'تفعيل التسجيل التلقائي',
+                    subtitle:
+                        'كل رسالة مالية جديدة تُسجل وتحدّث رصيد المحفظة المطابقة.',
+                    actionLabel: 'تفعيل المزامنة',
+                    busy: _busy,
+                    onAction: _enableAutomaticSync,
                   ),
-                  const SizedBox(height: 12),
-
-                  // Step 3: Wallets Check
-                  _buildStepItem(
-                    isCompleted: widget.walletCount > 0,
-                    icon: Icons.account_balance_wallet_rounded,
-                    title: 'ضبط محافظك الإلكترونية',
+                  const SizedBox(height: 10),
+                  _GuideStep(
+                    number: 3,
+                    completed: widget.walletCount > 0,
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'إضافة محافظك',
                     subtitle: widget.walletCount > 0
-                        ? 'لديك ${widget.walletCount} محفظة نشطة في ميزان.'
-                        : 'أضف محافظك (الكريمي، ون كاش، جيب، كاش) لترتبط بالرسائل تلقائياً.',
-                    actionLabel: widget.walletCount > 0 ? 'إضافة محفظة' : 'أضف محفظة الآن',
-                    onAction: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AddWalletScreen()),
-                      );
-                    },
-                    isDark: isDark,
+                        ? 'تم العثور على ${widget.walletCount} محفظة جاهزة للربط.'
+                        : 'أضف محفظة ليعرف التطبيق أين يسجل كل حركة.',
+                    actionLabel: 'إضافة محفظة',
+                    onAction: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AddWalletScreen(),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 12),
-
-                  // Step 4: SMS Sync (Import past messages)
-                  _buildStepItem(
-                    isCompleted: false, // Informational/repeatable action
-                    icon: Icons.sync_rounded,
-                    title: 'استيراد الرسائل السابقة من هاتفك',
-                    subtitle: 'افحص صندوق الرسائل لاستيراد حركات البنوك السابقة دفعة واحدة.',
-                    actionLabel: 'فحص الرسائل 📥',
-                    onAction: () {
-                      Navigator.pushNamed(context, AppRoutes.smsSync);
+                  const SizedBox(height: 10),
+                  _GuideStep(
+                    number: 4,
+                    completed: _initialScanCompleted,
+                    icon: Icons.mark_email_read_outlined,
+                    title: 'فحص الرسائل السابقة',
+                    subtitle:
+                        'راجع الرسائل المالية القديمة واستورد الحركات التي تريدها.',
+                    actionLabel: 'فحص الرسائل',
+                    onAction: () async {
+                      await Navigator.pushNamed(context, AppRoutes.smsSync);
+                      await _checkStatuses();
                     },
-                    isDark: isDark,
                   ),
                   const SizedBox(height: 14),
-
-                  // Subtle Tip for cash expenses
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isDark ? Colors.white12 : Colors.amber.shade200,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline_rounded, color: Colors.amber.shade800, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '💡 تلميح: الحركات البنكية تُسجل تلقائياً، ويمكنك تسجيل مصاريف الكاش في أي وقت عبر زر ➕ أسفل الشاشة.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Footer Actions
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      TextButton.icon(
-                        onPressed: () => AppHintsModal.show(context),
-                        icon: const Icon(Icons.menu_book_rounded, size: 18),
-                        label: const Text(
-                          'تصفح دليل ميزان الكامل 💡',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Cairo',
-                          ),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => AppHintsModal.show(context),
+                          icon: const Icon(Icons.menu_book_rounded),
+                          label: const Text('الجولة الإرشادية الكاملة'),
                         ),
                       ),
+                      const SizedBox(width: 8),
                       TextButton(
                         onPressed: () async {
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.setBool('dismissed_new_user_guide', true);
                           widget.onDismiss();
                         },
-                        child: Text(
-                          'إخفاء الدليل',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.white54 : Colors.grey.shade600,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
+                        child: const Text('إخفاء'),
                       ),
                     ],
                   ),
@@ -331,44 +288,111 @@ class _NewUserHintsCardState extends State<NewUserHintsCard> {
       ),
     );
   }
+}
 
-  Widget _buildStepItem({
-    required bool isCompleted,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String actionLabel,
-    required VoidCallback onAction,
-    required bool isDark,
-  }) {
+class _GuideNotice extends StatelessWidget {
+  final bool ready;
+  const _GuideNotice({required this.ready});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ready ? Colors.green : Colors.amber.shade800;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            ready ? Icons.check_circle_rounded : Icons.tips_and_updates_rounded,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              ready
+                  ? 'ممتاز: استقبال الرسائل والتسجيل التلقائي جاهزان.'
+                  : 'ابدأ بالخطوتين الأولى والثانية لتعمل مزامنة SMS فعلياً.',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuideStep extends StatelessWidget {
+  final int number;
+  final bool completed;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onAction;
+  final bool busy;
+
+  const _GuideStep({
+    required this.number,
+    required this.completed,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onAction,
+    this.busy = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(14),
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.03)
+            : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(15),
         border: Border.all(
-          color: isCompleted
-              ? Colors.green.withValues(alpha: 0.3)
-              : (isDark ? Colors.white10 : Colors.grey.shade200),
+          color: completed
+              ? Colors.green.withValues(alpha: 0.35)
+              : AppTheme.primaryColor.withValues(alpha: 0.14),
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: isCompleted
-                  ? Colors.green.withValues(alpha: 0.15)
-                  : AppTheme.primaryColor.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isCompleted ? Icons.check_circle_rounded : icon,
-              color: isCompleted ? Colors.green.shade700 : AppTheme.primaryColor,
-              size: 20,
-            ),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                backgroundColor: completed
+                    ? Colors.green.withValues(alpha: 0.14)
+                    : AppTheme.primaryColor.withValues(alpha: 0.12),
+                child: Icon(
+                  completed ? Icons.check_rounded : icon,
+                  color: completed ? Colors.green : AppTheme.primaryColor,
+                  size: 20,
+                ),
+              ),
+              Positioned(
+                right: -4,
+                top: -5,
+                child: CircleAvatar(
+                  radius: 9,
+                  backgroundColor: completed
+                      ? Colors.green
+                      : AppTheme.primaryColor,
+                  child: Text(
+                    '$number',
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -377,59 +401,39 @@ class _NewUserHintsCardState extends State<NewUserHintsCard> {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: isCompleted ? (isDark ? Colors.white70 : Colors.black87) : null,
-                    fontFamily: 'Cairo',
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.white60 : Colors.black54,
-                    height: 1.3,
-                    fontFamily: 'Cairo',
-                  ),
+                  style: const TextStyle(fontSize: 11, height: 1.35),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          if (isCompleted)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'مُفعّل ✅',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                  fontFamily: 'Cairo',
-                ),
-              ),
-            )
+          if (completed)
+            const Icon(Icons.verified_rounded, color: Colors.green)
           else
-            ElevatedButton(
-              onPressed: onAction,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                elevation: 0,
-                minimumSize: const Size(0, 34),
+            FilledButton(
+              onPressed: busy ? null : onAction,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                minimumSize: const Size(0, 36),
               ),
-              child: Text(
-                actionLabel,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-              ),
+              child: busy
+                  ? const SizedBox(
+                      width: 15,
+                      height: 15,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(actionLabel, style: const TextStyle(fontSize: 10)),
             ),
         ],
       ),

@@ -12,11 +12,7 @@ class ResponsiveBreakpoints {
 }
 
 /// Enumeration of screen types
-enum ResponsiveScreenType {
-  mobile,
-  tablet,
-  desktop,
-}
+enum ResponsiveScreenType { mobile, tablet, desktop }
 
 /// Helper class for responsive queries and layout calculations
 class Responsive {
@@ -38,7 +34,8 @@ class Responsive {
 
   static bool isTablet(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    return width >= ResponsiveBreakpoints.mobile && width < ResponsiveBreakpoints.tablet;
+    return width >= ResponsiveBreakpoints.mobile &&
+        width < ResponsiveBreakpoints.tablet;
   }
 
   static bool isDesktop(BuildContext context) =>
@@ -66,14 +63,23 @@ class Responsive {
   }
 
   /// Calculates an adaptive horizontal padding for content
-  static EdgeInsets contentPadding(BuildContext context, {double defaultPadding = 16.0}) {
+  static EdgeInsets contentPadding(
+    BuildContext context, {
+    double defaultPadding = 16.0,
+  }) {
     final width = MediaQuery.sizeOf(context).width;
     if (width > 1200) {
-      return EdgeInsets.symmetric(horizontal: (width - 1100) / 2, vertical: defaultPadding);
+      return EdgeInsets.symmetric(
+        horizontal: (width - 1100) / 2,
+        vertical: defaultPadding,
+      );
     } else if (width > 800) {
       return EdgeInsets.symmetric(horizontal: 32.0, vertical: defaultPadding);
     }
-    return EdgeInsets.symmetric(horizontal: defaultPadding, vertical: defaultPadding);
+    return EdgeInsets.symmetric(
+      horizontal: defaultPadding,
+      vertical: defaultPadding,
+    );
   }
 }
 
@@ -129,7 +135,9 @@ class ResponsiveConstraint extends StatelessWidget {
       alignment: alignment,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: padding != null ? Padding(padding: padding!, child: child) : child,
+        child: padding != null
+            ? Padding(padding: padding!, child: child)
+            : child,
       ),
     );
   }
@@ -145,10 +153,11 @@ extension ResponsiveExtension on BuildContext {
   double get screenWidth => MediaQuery.sizeOf(this).width;
   double get screenHeight => MediaQuery.sizeOf(this).height;
 
-  T responsive<T>({
-    required T mobile,
-    T? tablet,
-    T? desktop,
-  }) =>
-      Responsive.value<T>(this, mobile: mobile, tablet: tablet, desktop: desktop);
+  T responsive<T>({required T mobile, T? tablet, T? desktop}) =>
+      Responsive.value<T>(
+        this,
+        mobile: mobile,
+        tablet: tablet,
+        desktop: desktop,
+      );
 }

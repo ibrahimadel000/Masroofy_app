@@ -35,8 +35,9 @@ class BalanceCalculator {
     double total = 0.0;
 
     for (final wallet in wallets) {
-      final walletTransactions =
-          allTransactions.where((tx) => tx.walletId == wallet.id).toList();
+      final walletTransactions = allTransactions
+          .where((tx) => tx.walletId == wallet.id)
+          .toList();
       total += calculateWalletBalance(
         openingBalance: wallet.openingBalance,
         transactions: walletTransactions,
@@ -53,8 +54,9 @@ class BalanceCalculator {
   }) {
     final Map<String, double> totals = {};
     for (final wallet in wallets) {
-      final walletTransactions =
-          allTransactions.where((tx) => tx.walletId == wallet.id).toList();
+      final walletTransactions = allTransactions
+          .where((tx) => tx.walletId == wallet.id)
+          .toList();
       final bal = calculateWalletBalance(
         openingBalance: wallet.openingBalance,
         transactions: walletTransactions,

@@ -21,13 +21,16 @@ class FavoritesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = BlocBuilder<WalletsCubit, WalletsState>(
       builder: (context, walletsState) {
-        final wallets = walletsState is WalletsLoaded ? walletsState.wallets : <Wallet>[];
+        final wallets = walletsState is WalletsLoaded
+            ? walletsState.wallets
+            : <Wallet>[];
         final favorites = wallets.where((w) => w.isFavorite).toList();
 
         return BlocBuilder<TransactionsCubit, TransactionsState>(
           builder: (context, txState) {
-            final transactions =
-                txState is TransactionsLoaded ? txState.transactions : <TransactionModel>[];
+            final transactions = txState is TransactionsLoaded
+                ? txState.transactions
+                : <TransactionModel>[];
 
             if (favorites.isEmpty) {
               return Center(
@@ -35,7 +38,10 @@ class FavoritesScreen extends StatelessWidget {
                   child: ResponsiveConstraint(
                     maxWidth: 480,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32.0,
+                        vertical: 24.0,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -85,7 +91,11 @@ class FavoritesScreen extends StatelessWidget {
                   final col1 = <Widget>[];
                   final col2 = <Widget>[];
                   for (int i = 0; i < favorites.length; i++) {
-                    final card = _buildFavoriteCard(context, favorites[i], transactions);
+                    final card = _buildFavoriteCard(
+                      context,
+                      favorites[i],
+                      transactions,
+                    );
                     if (i % 2 == 0) {
                       col1.add(card);
                     } else {
@@ -97,7 +107,10 @@ class FavoritesScreen extends StatelessWidget {
                     maxWidth: 1000,
                     alignment: Alignment.topCenter,
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 16.0,
+                      ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -114,10 +127,17 @@ class FavoritesScreen extends StatelessWidget {
                   maxWidth: 600,
                   alignment: Alignment.topCenter,
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 16.0,
+                    ),
                     itemCount: favorites.length,
                     itemBuilder: (context, index) {
-                      return _buildFavoriteCard(context, favorites[index], transactions);
+                      return _buildFavoriteCard(
+                        context,
+                        favorites[index],
+                        transactions,
+                      );
                     },
                   ),
                 );
@@ -133,16 +153,20 @@ class FavoritesScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('المفضلة ⭐'),
-      ),
+      appBar: AppBar(title: const Text('المفضلة ⭐')),
       body: content,
     );
   }
 
-  Widget _buildFavoriteCard(BuildContext context, Wallet wallet, List<TransactionModel> transactions) {
+  Widget _buildFavoriteCard(
+    BuildContext context,
+    Wallet wallet,
+    List<TransactionModel> transactions,
+  ) {
     final walletColor = Color(wallet.colorValue);
-    final walletTxs = transactions.where((tx) => tx.walletId == wallet.id).toList();
+    final walletTxs = transactions
+        .where((tx) => tx.walletId == wallet.id)
+        .toList();
     final liveBalance = BalanceCalculator.calculateWalletBalance(
       openingBalance: wallet.openingBalance,
       transactions: walletTxs,
@@ -172,14 +196,13 @@ class FavoritesScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  walletColor,
-                  walletColor.withValues(alpha: 0.85),
-                ],
+                colors: [walletColor, walletColor.withValues(alpha: 0.85)],
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
               ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(18),
+              ),
             ),
             child: Row(
               children: [
@@ -219,7 +242,11 @@ class FavoritesScreen extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.star_rounded, color: Colors.amber, size: 28),
+                  icon: const Icon(
+                    Icons.star_rounded,
+                    color: Colors.amber,
+                    size: 28,
+                  ),
                   tooltip: 'إزالة من المفضلة',
                   onPressed: () {
                     context.read<WalletsCubit>().toggleFavorite(wallet.id);
@@ -239,10 +266,7 @@ class FavoritesScreen extends StatelessWidget {
                   children: [
                     const Text(
                       'الرصيد المتاح:',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                     const SizedBox(width: 8),
                     Flexible(
@@ -250,11 +274,16 @@ class FavoritesScreen extends StatelessWidget {
                         fit: BoxFit.scaleDown,
                         alignment: AlignmentDirectional.centerEnd,
                         child: Text(
-                          AppConstants.formatCurrency(liveBalance, wallet.currencyCode),
+                          AppConstants.formatCurrency(
+                            liveBalance,
+                            wallet.currencyCode,
+                          ),
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: liveBalance >= 0 ? AppTheme.primaryColor : Colors.red,
+                            color: liveBalance >= 0
+                                ? AppTheme.primaryColor
+                                : Colors.red,
                           ),
                         ),
                       ),
@@ -284,8 +313,9 @@ class FavoritesScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  AddTransactionScreen(initialWalletId: wallet.id),
+                              builder: (_) => AddTransactionScreen(
+                                initialWalletId: wallet.id,
+                              ),
                             ),
                           );
                         },
@@ -308,7 +338,8 @@ class FavoritesScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => WalletDetailsScreen(walletId: wallet.id),
+                              builder: (_) =>
+                                  WalletDetailsScreen(walletId: wallet.id),
                             ),
                           );
                         },
@@ -328,15 +359,22 @@ class FavoritesScreen extends StatelessWidget {
                     final clr = isIncome
                         ? AppTheme.primaryColor
                         : isAdj
-                            ? Colors.blue.shade700
-                            : Colors.red.shade700;
-                    final pfx = isIncome ? '+' : isAdj ? (tx.amount >= 0 ? '+' : '') : '-';
+                        ? Colors.blue.shade700
+                        : Colors.red.shade700;
+                    final pfx = isIncome
+                        ? '+'
+                        : isAdj
+                        ? (tx.amount >= 0 ? '+' : '')
+                        : '-';
 
                     return InkWell(
                       onTap: () => TransactionDetailSheet.show(context, tx),
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4.0,
+                          horizontal: 4.0,
+                        ),
                         child: Row(
                           children: [
                             Icon(
@@ -348,7 +386,10 @@ class FavoritesScreen extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 '${tx.category} • ${AppConstants.formatDate(tx.date)}  ${AppConstants.formatTime(tx.date)}',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
